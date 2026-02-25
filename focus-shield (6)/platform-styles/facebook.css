@@ -1,0 +1,66 @@
+/* Focus Shield — Facebook
+   ALL rules gated behind body.fs-locked. */
+
+/* Hide News Feed */
+body.fs-locked [role="feed"] {
+  display: none !important;
+}
+
+/* Hide Stories */
+body.fs-locked [aria-label="Stories"] {
+  display: none !important;
+}
+
+/* Hide People You May Know */
+body.fs-locked [aria-label="People You May Know"] {
+  display: none !important;
+}
+
+/* Hide right sidebar (contacts, sponsored) */
+body.fs-locked [data-pagelet="RightRail"] {
+  display: none !important;
+}
+
+/* Hide Reels */
+body.fs-locked [aria-label*="Reels"] {
+  display: none !important;
+}
+
+/* Hide Gaming */
+body.fs-locked [data-pagelet*="Gaming"] {
+  display: none !important;
+}
+
+/* Hide notification count badges */
+body.fs-locked [aria-label*="notifications"] span[data-visualcompletion="ignore"] {
+  display: none !important;
+}
+
+/* Hide nav items by aria-label */
+body.fs-locked [role="navigation"] a[aria-label="Home"],
+body.fs-locked [role="navigation"] a[aria-label="Watch"],
+body.fs-locked [role="navigation"] a[aria-label="Marketplace"],
+body.fs-locked [role="navigation"] a[aria-label="Gaming"],
+body.fs-locked [role="navigation"] a[aria-label="Notifications"],
+body.fs-locked [role="banner"] a[aria-label="Home"],
+body.fs-locked [role="banner"] a[aria-label="Watch"],
+body.fs-locked [role="banner"] a[aria-label="Marketplace"],
+body.fs-locked [role="banner"] a[aria-label="Gaming"],
+body.fs-locked [role="banner"] a[aria-label="Notifications"] {
+  display: none !important;
+}
+
+/* Hide nav links by href */
+body.fs-locked [role="navigation"] a[href="/"],
+body.fs-locked [role="navigation"] a[href="/home"],
+body.fs-locked [role="navigation"] a[href="/watch"],
+body.fs-locked [role="navigation"] a[href*="/watch"],
+body.fs-locked [role="navigation"] a[href="/marketplace"],
+body.fs-locked [role="navigation"] a[href*="/marketplace"],
+body.fs-locked [role="navigation"] a[href*="/gaming"],
+body.fs-locked [role="navigation"] a[href*="/reels"],
+body.fs-locked [role="navigation"] a[href*="/groups/feed"],
+body.fs-locked [role="navigation"] a[href*="/notifications"],
+body.fs-locked [role="navigation"] a[href*="/news"] {
+  display: none !important;
+}

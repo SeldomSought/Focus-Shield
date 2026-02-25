@@ -1,0 +1,64 @@
+/* Focus Shield — Twitter/X
+   ALL rules gated behind body.fs-locked.
+   When session is active, body.fs-locked is removed → full native experience. */
+
+/* Hide sidebar */
+body.fs-locked [data-testid="sidebarColumn"] { display: none !important; }
+
+/* Hide nav items */
+body.fs-locked nav a[href="/home"],
+body.fs-locked nav a[href="/explore"],
+body.fs-locked nav a[href="/search"],
+body.fs-locked nav a[href="/notifications"],
+body.fs-locked nav a[href="/messages"],
+body.fs-locked nav a[href*="/communities"],
+body.fs-locked nav a[href*="/lists"],
+body.fs-locked nav a[href*="/spaces"],
+body.fs-locked nav a[href*="/premium"],
+body.fs-locked nav a[href*="/verified"],
+body.fs-locked nav a[href*="/grok"],
+body.fs-locked nav a[href*="/monetization"],
+body.fs-locked nav a[href*="/jobs"],
+body.fs-locked nav a[href*="/analytics"],
+body.fs-locked nav a[data-testid="AppTabBar_Home_Link"],
+body.fs-locked nav a[data-testid="AppTabBar_Explore_Link"],
+body.fs-locked nav a[data-testid="AppTabBar_Notifications_Link"],
+body.fs-locked nav a[data-testid="AppTabBar_DirectMessage_Link"] {
+  display: none !important;
+}
+
+/* Bottom tab bar items */
+body.fs-locked [data-testid="BottomBar"] a[href="/home"],
+body.fs-locked [data-testid="BottomBar"] a[href="/explore"],
+body.fs-locked [data-testid="BottomBar"] a[href="/search"],
+body.fs-locked [data-testid="BottomBar"] a[href="/notifications"],
+body.fs-locked [data-testid="BottomBar"] a[href="/messages"] {
+  display: none !important;
+}
+
+/* Hide timeline on home (feed page) */
+body.fs-locked [aria-label*="Timeline"],
+body.fs-locked [data-testid="primaryColumn"] section[role="region"],
+body.fs-locked [data-testid="primaryColumn"] [role="tablist"],
+body.fs-locked [data-testid="cellInnerDiv"] {
+  display: none !important;
+}
+
+/* Notification badges */
+body.fs-locked [aria-label*="unread"],
+body.fs-locked nav[role="navigation"] [data-testid*="count"],
+body.fs-locked nav[role="navigation"] [aria-live="polite"] { display: none !important; }
+
+/* Who to follow */
+body.fs-locked [aria-label="Who to follow"],
+body.fs-locked [aria-label="Relevant people"] { display: none !important; }
+
+/* Premium upsells */
+body.fs-locked [data-testid="verified-account-upsell"],
+body.fs-locked a[href*="twitter_blue"],
+body.fs-locked a[href*="premium_sign_up"],
+body.fs-locked [data-testid="premium-upsell"] { display: none !important; }
+
+/* Trending */
+body.fs-locked [aria-label="Timeline: Trending now"],
+body.fs-locked [aria-label="Timeline: Explore"] { display: none !important; }

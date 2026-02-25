@@ -1,0 +1,62 @@
+/* Focus Shield — YouTube
+   ALL rules gated behind body.fs-locked. */
+
+/* Hide home feed content */
+body.fs-locked ytd-rich-grid-renderer,
+body.fs-locked ytd-two-column-browse-results-renderer,
+body.fs-locked ytd-feed-filter-chip-bar-renderer,
+body.fs-locked #chip-bar,
+body.fs-locked ytd-rich-item-renderer,
+body.fs-locked ytd-video-renderer,
+body.fs-locked ytd-compact-video-renderer {
+  display: none !important;
+}
+
+/* Hide sidebar recommendations on watch pages */
+body.fs-locked #secondary,
+body.fs-locked ytd-watch-next-secondary-results-renderer {
+  display: none !important;
+}
+
+/* Hide shorts shelves */
+body.fs-locked ytd-reel-shelf-renderer,
+body.fs-locked ytd-rich-shelf-renderer[is-shorts],
+body.fs-locked [is-shorts] {
+  display: none !important;
+}
+
+/* Hide end screen overlays */
+body.fs-locked .ytp-endscreen-content,
+body.fs-locked .ytp-ce-element,
+body.fs-locked .ytp-autonav-endscreen-countdown-overlay {
+  display: none !important;
+}
+
+/* Hide nav items to blocked destinations */
+body.fs-locked ytd-guide-entry-renderer a[title="Home"],
+body.fs-locked ytd-guide-entry-renderer a[title="Shorts"],
+body.fs-locked ytd-guide-entry-renderer a[title="Subscriptions"],
+body.fs-locked ytd-guide-entry-renderer a[title="Trending"],
+body.fs-locked ytd-guide-entry-renderer a[title="Explore"] {
+  display: none !important;
+}
+
+body.fs-locked ytd-mini-guide-entry-renderer a[title="Home"],
+body.fs-locked ytd-mini-guide-entry-renderer a[title="Shorts"],
+body.fs-locked ytd-mini-guide-entry-renderer a[title="Subscriptions"],
+body.fs-locked ytd-mini-guide-entry-renderer a[title="Trending"],
+body.fs-locked ytd-mini-guide-entry-renderer a[title="Explore"] {
+  display: none !important;
+}
+
+/* Hide notification badge */
+body.fs-locked ytd-notification-topbar-button-renderer .yt-spec-icon-badge-shape__badge {
+  display: none !important;
+}
+
+/* Hide upsell banners */
+body.fs-locked ytd-mealbar-promo-renderer,
+body.fs-locked ytd-statement-banner-renderer,
+body.fs-locked ytd-brand-video-singleton-renderer {
+  display: none !important;
+}

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:340px;background:#08080c;color:#e7e9ea;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+
+/* Header */
+.hdr{padding:14px 16px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+.hdr .dot{width:8px;height:8px;border-radius:50%;background:#4ade80}
+.hdr .name{font-size:14px;font-weight:800;letter-spacing:-.3px}
+.hdr .ver{font-size:10px;color:#536471;margin-left:auto}
+.hdr .streak{font-size:10px;color:#ffa500;font-weight:700;margin-left:6px}
+
+/* Timer */
+.timer{padding:20px 16px;text-align:center;border-bottom:1px solid rgba(255,255,255,.06)}
+.ring-wrap{position:relative;width:96px;height:96px;margin:0 auto 10px}
+.ring-wrap svg{transform:rotate(-90deg)}
+.ring-bg{stroke:rgba(255,255,255,.06);fill:none}
+.ring-fg{fill:none;stroke-linecap:round;transition:stroke-dashoffset .5s,stroke .5s}
+.digits{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.status{font-size:11px;color:#71767b;margin-bottom:10px}
+.ctrls{display:flex;gap:6px;justify-content:center}
+.cb{padding:7px 18px;border-radius:18px;border:none;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.cb-go{background:#4ade80;color:#000}.cb-go:hover{background:#22c55e}
+.cb-pause{background:#ffa500;color:#000}.cb-stop{background:rgba(255,255,255,.08);color:#e7e9ea}
+
+/* Sections */
+.sec{padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.sec-title{font-size:10px;font-weight:700;color:#536471;letter-spacing:.8px;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{padding:5px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:transparent;color:#71767b;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.chip.on{background:rgba(74,222,128,.12);border-color:#4ade80;color:#4ade80}
+.chip:disabled{opacity:.3;cursor:not-allowed}
+
+/* Toggle row */
+.row{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.row-label{font-size:12px;font-weight:600}
+.row-sub{font-size:10px;color:#536471}
+.sw{position:relative;width:34px;height:18px}
+.sw input{opacity:0;width:0;height:0}
+.sl{position:absolute;inset:0;background:#333;border-radius:18px;cursor:pointer;transition:.2s}
+.sl:before{content:"";position:absolute;height:14px;width:14px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:.2s}
+input:checked+.sl{background:#4ade80}input:checked+.sl:before{transform:translateX(16px)}
+input:disabled+.sl{opacity:.3;cursor:not-allowed}
+
+/* Lock section */
+.lock-section{padding:10px 16px}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:700}
+.badge-on{background:rgba(244,33,46,.15);color:#f4212e}
+.badge-off{background:rgba(74,222,128,.1);color:#4ade80}
+
+/* Form elements */
+.inp{width:100%;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#e7e9ea;font-size:11px;margin:4px 0;outline:none}
+.inp:focus{border-color:rgba(74,222,128,.4)}.inp::placeholder{color:#536471}
+.lbtn{width:100%;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;transition:all .15s}
+.lbtn-on{background:#f4212e;color:#fff}.lbtn-on:hover{background:#dc1b27}
+.lbtn-off{background:rgba(255,255,255,.08);color:#e7e9ea}.lbtn-off:hover{background:rgba(255,255,255,.12)}
+.lbtn-green{background:#4ade80;color:#000}.lbtn-green:hover{background:#22c55e}
+.info{font-size:9px;color:#536471;margin-top:5px;line-height:1.4}
+.err{font-size:10px;color:#f4212e;margin-top:4px}
+.cooldown{background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);border-radius:8px;padding:8px;margin-top:5px}
+.cooldown p{font-size:10px;color:#ffa500;line-height:1.3}
+
+/* Setup screen */
+.setup{padding:20px 16px;display:none}
+.setup-title{font-size:18px;font-weight:800;text-align:center;margin-bottom:6px}
+.setup-sub{font-size:12px;color:#71767b;text-align:center;margin-bottom:16px;line-height:1.5}
+.setup-steps{margin:12px 0}
+.setup-step{display:flex;gap:10px;padding:8px 0;align-items:flex-start}
+.setup-step-num{width:22px;height:22px;border-radius:50%;background:rgba(74,222,128,.12);color:#4ade80;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.setup-step-text{font-size:12px;color:#e7e9ea;line-height:1.4}
+.setup-step-text span{color:#71767b;font-size:10px;display:block;margin-top:2px}
+
+/* Locked gate */
+.gate{padding:16px;text-align:center;display:none}
+.gate-icon{font-size:32px;margin-bottom:8px}
+.gate-title{font-size:14px;font-weight:800;margin-bottom:4px}
+.gate-sub{font-size:11px;color:#71767b;margin-bottom:12px;line-height:1.4}
+
+/* Tamper warning */
+.tamper-warn{background:rgba(244,33,46,.08);border:1px solid rgba(244,33,46,.2);border-radius:8px;padding:8px 12px;margin:8px 16px;display:none}
+.tamper-warn p{font-size:10px;color:#f4212e;line-height:1.4}
+
+/* Main content area */
+.main-content{}
+.hidden{display:none!important}
+</style>
+</head><body>
+
+<div class="hdr">
+  <div class="dot" id="hdrDot"></div>
+  <span class="name">Focus Shield</span>
+  <span class="streak" id="hdrStreak"></span>
+  <span class="ver">v2.0</span>
+</div>
+
+<!-- TAMPER WARNING -->
+<div class="tamper-warn" id="tamperWarn">
+  <p>⚠️ Extension was disabled/removed for <span id="tamperDuration"></span>. This has been logged.</p>
+</div>
+
+<!-- SETUP SCREEN (first install, no passphrase set) -->
+<div class="setup" id="setupScreen">
+  <div class="setup-title">🛡️ Set Up Focus Shield</div>
+  <div class="setup-sub">Hand your phone/laptop to your accountability partner to set a passphrase. This locks the extension so it can't be easily turned off.</div>
+  <div class="setup-steps">
+    <div class="setup-step"><div class="setup-step-num">1</div><div class="setup-step-text">Partner creates a passphrase<span>Only they should know it</span></div></div>
+    <div class="setup-step"><div class="setup-step-num">2</div><div class="setup-step-text">Extension locks down<span>Settings & disabling blocked without passphrase</span></div></div>
+    <div class="setup-step"><div class="setup-step-num">3</div><div class="setup-step-text">You get 30 min/day of feeds<span>Bookmarks & posting always work</span></div></div>
+  </div>
+  <input type="password" class="inp" id="setupPass" placeholder="Partner: enter passphrase (4+ chars)">
+  <input type="password" class="inp" id="setupPass2" placeholder="Partner: confirm passphrase">
+  <input type="url" class="inp" id="setupWebhook" placeholder="Webhook URL (optional — for alerts)">
+  <button class="lbtn lbtn-green" id="setupBtn">🔒 Activate Protection</button>
+  <button class="lbtn lbtn-off" id="setupSkip" style="margin-top:6px">Skip for now (not recommended)</button>
+  <div id="setupErr"></div>
+</div>
+
+<!-- MAIN INTERFACE -->
+<div class="main-content" id="mainContent" style="display:none">
+
+  <!-- Unlock Gate (shown when locked & user needs to change settings) -->
+  <div class="gate" id="unlockGate">
+    <div class="gate-icon">🔒</div>
+    <div class="gate-title">Protection Active</div>
+    <div class="gate-sub">Enter your accountability partner's passphrase to modify settings or disable protection.</div>
+    <input type="password" class="inp" id="gatePass" placeholder="Enter passphrase">
+    <button class="lbtn lbtn-off" id="gateBtn">Unlock Settings</button>
+    <div id="gateErr"></div>
+    <p class="info" style="margin-top:8px">Sessions can be started/stopped without the passphrase.</p>
+  </div>
+
+  <!-- Timer (always visible) -->
+  <div class="timer">
+    <div class="ring-wrap">
+      <svg width="96" height="96"><circle class="ring-bg" cx="48" cy="48" r="40" stroke-width="5"/>
+      <circle class="ring-fg" id="ring" cx="48" cy="48" r="40" stroke-width="5" stroke="#4ade80" stroke-dasharray="251.3" stroke-dashoffset="0"/></svg>
+      <div class="digits" id="digits">30:00</div>
+    </div>
+    <div class="status" id="status">Feeds locked</div>
+    <div class="ctrls">
+      <button class="cb cb-go" id="bStart">▶ Start</button>
+      <button class="cb cb-pause" id="bPause" style="display:none">❚❚</button>
+      <button class="cb cb-stop" id="bStop" style="display:none">■ Stop</button>
+    </div>
+  </div>
+
+  <!-- Settings (hidden when locked) -->
+  <div id="settingsArea">
+    <div class="sec">
+      <div class="sec-title">DAILY LIMIT</div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">MASTER</div>
+      <div class="row">
+        <div><div class="row-label">Focus Shield</div><div class="row-sub">Enable/disable protection</div></div>
+        <label class="sw"><input type="checkbox" id="master" checked><span class="sl"></span></label>
+      </div>
+    </div>
+    <div class="lock-section">
+      <div class="sec-title" style="display:flex;align-items:center;gap:6px">COMMITMENT LOCK <span class="badge" id="lockBadge">OFF</span></div>
+      <div id="lockUI"></div>
+    </div>
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body></html>

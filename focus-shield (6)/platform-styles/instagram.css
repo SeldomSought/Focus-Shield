@@ -1,0 +1,89 @@
+/* Focus Shield — Instagram
+   ALL rules gated behind body.fs-locked.
+   Instagram obfuscates class names, so we target aria-labels and structure. */
+
+/* Hide feed posts (articles are posts on Instagram) */
+body.fs-locked article {
+  display: none !important;
+}
+
+/* Hide stories tray (containers with canvas elements for story rings) */
+body.fs-locked [role="list"]:has(canvas) {
+  display: none !important;
+}
+
+/* Hide presentation containers (used for feed cards) */
+body.fs-locked [role="presentation"] {
+  display: none !important;
+}
+
+/* Hide nav items via aria-labels */
+body.fs-locked nav [aria-label="Home"],
+body.fs-locked nav [aria-label="Search"],
+body.fs-locked nav [aria-label="Search and explore"],
+body.fs-locked nav [aria-label="Explore"],
+body.fs-locked nav [aria-label="Reels"],
+body.fs-locked nav [aria-label="Messenger"],
+body.fs-locked nav [aria-label="Messages"],
+body.fs-locked nav [aria-label="Notifications"],
+body.fs-locked [role="navigation"] [aria-label="Home"],
+body.fs-locked [role="navigation"] [aria-label="Search"],
+body.fs-locked [role="navigation"] [aria-label="Search and explore"],
+body.fs-locked [role="navigation"] [aria-label="Explore"],
+body.fs-locked [role="navigation"] [aria-label="Reels"],
+body.fs-locked [role="navigation"] [aria-label="Messenger"],
+body.fs-locked [role="navigation"] [aria-label="Messages"],
+body.fs-locked [role="navigation"] [aria-label="Notifications"] {
+  display: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Hide nav links by href */
+body.fs-locked nav a[href="/"],
+body.fs-locked nav a[href="/home"],
+body.fs-locked nav a[href="/explore"],
+body.fs-locked nav a[href="/explore/"],
+body.fs-locked nav a[href="/reels"],
+body.fs-locked nav a[href="/reels/"],
+body.fs-locked nav a[href="/direct"],
+body.fs-locked nav a[href="/direct/"],
+body.fs-locked nav a[href="/direct/inbox"],
+body.fs-locked nav a[href="/direct/inbox/"],
+body.fs-locked [role="navigation"] a[href="/"],
+body.fs-locked [role="navigation"] a[href="/home"],
+body.fs-locked [role="navigation"] a[href="/explore"],
+body.fs-locked [role="navigation"] a[href="/explore/"],
+body.fs-locked [role="navigation"] a[href="/reels"],
+body.fs-locked [role="navigation"] a[href="/reels/"],
+body.fs-locked [role="navigation"] a[href="/direct"],
+body.fs-locked [role="navigation"] a[href="/direct/"],
+body.fs-locked [role="navigation"] a[href="/direct/inbox"],
+body.fs-locked [role="navigation"] a[href="/direct/inbox/"] {
+  display: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Threads callout */
+body.fs-locked a[href*="threads.net"] {
+  display: none !important;
+}
+
+/* Notification badge dots */
+body.fs-locked nav [aria-label="Notifications"] span,
+body.fs-locked [role="navigation"] [aria-label="Notifications"] span {
+  display: none !important;
+}
+
+/* Footer */
+body.fs-locked footer {
+  display: none !important;
+}
+
+/* Suggested for you sidebar */
+body.fs-locked aside [role="presentation"] {
+  display: none !important;
+}

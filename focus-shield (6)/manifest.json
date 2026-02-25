@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Focus Shield",
+  "description": "Strip social media down to bookmarks & posting. 30 min/day consumption limit across Twitter, Reddit, YouTube, Instagram & Facebook.",
+  "version": "2.0.0",
+  "permissions": [
+    "storage",
+    "alarms",
+    "activeTab",
+    "tabs",
+    "management"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://twitter.com/*", "https://x.com/*",
+        "https://mobile.twitter.com/*", "https://mobile.x.com/*"
+      ],
+      "js": ["shared.js", "platform-scripts/twitter.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.reddit.com/*", "https://old.reddit.com/*", "https://reddit.com/*"
+      ],
+      "js": ["shared.js", "platform-scripts/reddit.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*", "https://youtube.com/*", "https://m.youtube.com/*"
+      ],
+      "js": ["shared.js", "platform-scripts/youtube.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.instagram.com/*", "https://instagram.com/*"
+      ],
+      "js": ["shared.js", "platform-scripts/instagram.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.facebook.com/*", "https://facebook.com/*",
+        "https://m.facebook.com/*", "https://web.facebook.com/*"
+      ],
+      "js": ["shared.js", "platform-scripts/facebook.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}
