@@ -1,0 +1,146 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #06060a;
+  color: #e7e9ea;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(16, 16, 22, 0.98);
+  border: 1px solid rgba(244, 33, 46, 0.25);
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-shadow: 0 0 60px rgba(244, 33, 46, 0.08), 0 24px 80px rgba(0,0,0,.7);
+  text-align: center;
+}
+
+.icon { font-size: 44px; margin-bottom: 12px; }
+
+.title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #f4212e;
+  letter-spacing: -.3px;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #71767b;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.remaining-label {
+  font-size: 11px;
+  color: #536471;
+  letter-spacing: .6px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.remaining-value {
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #e7e9ea;
+  margin-bottom: 24px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,.06);
+  margin: 20px 0;
+}
+
+.session-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  background: #4ade80;
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+  margin-bottom: 12px;
+}
+.session-btn:hover { background: #22c55e; transform: scale(1.02); }
+
+.passphrase-label {
+  font-size: 10px;
+  color: #536471;
+  letter-spacing: .6px;
+  font-weight: 700;
+  text-align: left;
+  margin-bottom: 6px;
+  margin-top: 4px;
+}
+
+input[type="password"] {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: #e7e9ea;
+  font-size: 13px;
+  margin-bottom: 8px;
+  outline: none;
+}
+input[type="password"]:focus { border-color: rgba(74,222,128,.4); }
+input[type="password"]::placeholder { color: #536471; }
+
+.unlock-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255,255,255,.07);
+  color: #e7e9ea;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+  margin-bottom: 8px;
+}
+.unlock-btn:hover { background: rgba(255,255,255,.12); }
+.unlock-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.countdown-note {
+  font-size: 10px;
+  color: #536471;
+  margin-top: 4px;
+}
+
+.err { font-size: 11px; color: #f4212e; margin-top: 6px; }
+
+.deterrence-msg {
+  background: rgba(255,165,0,.07);
+  border: 1px solid rgba(255,165,0,.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: #ffa500;
+  line-height: 1.5;
+  margin-top: 10px;
+  text-align: left;
+  display: none;
+}
+
+.close-note {
+  font-size: 10px;
+  color: #536471;
+  margin-top: 16px;
+}

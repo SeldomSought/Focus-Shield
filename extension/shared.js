@@ -38,6 +38,7 @@
   let _overlayExpired = null;  // expired state when overlay was built
   let _evalDebounce = null;
   let _lastEvalUrl = null;
+  let _lockedClassObserver = null;
 
   // ═══════════════════════════════════════════════════════════════
   // HELPERS
@@ -237,6 +238,34 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // FS-LOCKED CLASS — applied to body + documentElement when locked
+  // ═══════════════════════════════════════════════════════════════
+
+  function applyLockedClass() {
+    if (document.body) document.body.classList.add("fs-locked");
+    if (document.documentElement) document.documentElement.classList.add("fs-locked");
+  }
+
+  function removeLockedClass() {
+    if (document.body) document.body.classList.remove("fs-locked");
+    if (document.documentElement) document.documentElement.classList.remove("fs-locked");
+    if (_lockedClassObserver) { _lockedClassObserver.disconnect(); _lockedClassObserver = null; }
+  }
+
+  function startLockedClassGuard() {
+    applyLockedClass();
+    if (_lockedClassObserver) return;
+    _lockedClassObserver = new MutationObserver(() => {
+      // Re-add class if it was stripped while we're still locked
+      applyLockedClass();
+    });
+    const targets = [document.body, document.documentElement].filter(Boolean);
+    for (const t of targets) {
+      _lockedClassObserver.observe(t, { attributes: true, attributeFilter: ["class"] });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // MASTER UPDATE — timer ticks only update pill, never overlay
   // ═══════════════════════════════════════════════════════════════
 
@@ -249,6 +278,13 @@
     const isActive = timer.sessionActive && !timer.isPaused && !isExpired;
     const isPaused = timer.sessionActive && timer.isPaused;
     const feedUnlocked = !timer.enabled || isActive;
+
+    // Apply/remove fs-locked body class for CSS rules
+    if (feedUnlocked) {
+      removeLockedClass();
+    } else {
+      startLockedClassGuard();
+    }
 
     // STATE TRANSITIONS
     if (_lastFeedUnlocked !== null && feedUnlocked !== _lastFeedUnlocked) {

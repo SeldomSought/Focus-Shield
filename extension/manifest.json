@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Focus Shield",
   "description": "Strip social media down to bookmarks & posting. 30 min/day consumption limit across Twitter, Reddit, YouTube, Instagram & Facebook.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "permissions": [
     "storage",
     "alarms",
@@ -20,6 +20,7 @@
         "https://mobile.twitter.com/*", "https://mobile.x.com/*"
       ],
       "js": ["shared.js", "platform-scripts/twitter.js"],
+      "css": ["platform-styles/twitter.css"],
       "run_at": "document_start"
     },
     {
@@ -27,6 +28,7 @@
         "https://www.reddit.com/*", "https://old.reddit.com/*", "https://reddit.com/*"
       ],
       "js": ["shared.js", "platform-scripts/reddit.js"],
+      "css": ["platform-styles/reddit.css"],
       "run_at": "document_start"
     },
     {
@@ -34,6 +36,7 @@
         "https://www.youtube.com/*", "https://youtube.com/*", "https://m.youtube.com/*"
       ],
       "js": ["shared.js", "platform-scripts/youtube.js"],
+      "css": ["platform-styles/youtube.css"],
       "run_at": "document_start"
     },
     {
@@ -41,6 +44,7 @@
         "https://www.instagram.com/*", "https://instagram.com/*"
       ],
       "js": ["shared.js", "platform-scripts/instagram.js"],
+      "css": ["platform-styles/instagram.css"],
       "run_at": "document_start"
     },
     {
@@ -49,6 +53,7 @@
         "https://m.facebook.com/*", "https://web.facebook.com/*"
       ],
       "js": ["shared.js", "platform-scripts/facebook.js"],
+      "css": ["platform-styles/facebook.css"],
       "run_at": "document_start"
     }
   ],
@@ -56,5 +61,11 @@
     "default_popup": "popup.html",
     "default_icon": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
   },
-  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "web_accessible_resources": [
+    {
+      "resources": ["escape.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

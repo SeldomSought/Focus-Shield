@@ -1,5 +1,5 @@
 /*
- * Focus Shield — Background Service Worker (v3)
+ * Focus Shield — Background Service Worker (v4)
  *
  * PROTECTION MODEL:
  *   - Settings/disable require passphrase OR active session
@@ -7,13 +7,15 @@
  *   - Extension disable/removal detected via alive-timestamp gaps
  *   - Webhook heartbeat every 5 min (silence = tamper)
  *   - Uninstall URL opens accountability page
- *   - chrome.management API detects other extensions being toggled
+ *   - Delta-time tick model: real elapsed seconds, not assumed 1s per alarm
+ *   - Escape interrupt window when chrome://extensions opened while locked
  */
 
 const DEFAULT_TIMER = {
   secondsUsed: 0, dailyLimitSeconds: 1800,
   lastResetDate: new Date().toISOString().split("T")[0],
   sessionActive: false, isPaused: false, enabled: true,
+  lastTickAt: null,
 };
 
 const DEFAULT_PLATFORMS = {
@@ -26,8 +28,9 @@ const DEFAULT_PLATFORMS = {
 
 const DEFAULT_COMMITMENT = {
   locked: false, passphraseHash: null, lockedAt: null,
-  cooldownMinutes: 1440, pendingDisable: null,
+  pendingDisable: null,
   webhookUrl: null, lastHeartbeat: null, dailyLog: [],
+  deterrenceLevel: "off",
 };
 
 const DEFAULT_META = {
@@ -47,6 +50,29 @@ const DOMAINS = {
   "www.instagram.com":"instagram","instagram.com":"instagram",
   "www.facebook.com":"facebook","facebook.com":"facebook","m.facebook.com":"facebook","web.facebook.com":"facebook",
 };
+
+// ── Deterrence messages ────────────────────────────────────
+
+const DETERRENCE_MESSAGES = {
+  firm: [
+    "You set this rule yourself. Don't quit at the first urge.",
+    "Start a session if you genuinely need this — that's what it's for.",
+    "The rule exists because past-you knew present-you would want to break it.",
+    "One urge isn't an emergency. It passes in 90 seconds.",
+  ],
+  hard: [
+    "You set this rule. Breaking it now means the version of you that set it was right to distrust you.",
+    "This isn't the first time you've felt this urge. It's never actually urgent.",
+    "Start a session and use your time. Don't just dismantle the fence.",
+    "You said you wanted to change. Here's the moment where that means something.",
+  ],
+};
+
+function getDeterrenceMessage(level) {
+  const msgs = DETERRENCE_MESSAGES[level];
+  if (!msgs) return null;
+  return msgs[Math.floor(Math.random() * msgs.length)];
+}
 
 // ── Storage ────────────────────────────────────────────────
 
@@ -77,6 +103,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
   meta.lastAliveTimestamp = Date.now();
   await setMeta(meta);
+  // Recreate alarms on install/update
+  chrome.alarms.create("fs_tick", { periodInMinutes: 0.5 });
+  chrome.alarms.create("fs_reset", { periodInMinutes: 1 });
+  chrome.alarms.create("fs_heartbeat", { periodInMinutes: 5 });
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -126,30 +156,55 @@ async function detectTampering() {
 }
 
 // ── Tab monitoring ────────────────────────────────────────
-// Detect when user opens chrome://extensions (they might be trying to remove us)
+// Detect when user opens chrome://extensions or settings while locked
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.url && (
-    changeInfo.url.startsWith("chrome://extensions") ||
-    changeInfo.url.startsWith("chrome://settings") ||
-    changeInfo.url.startsWith("edge://extensions") ||
-    changeInfo.url.startsWith("brave://extensions")
-  )) {
-    const c = await getCommitment();
-    if (c.locked) {
-      const timer = await getTimer();
-      const isActive = timer.sessionActive && !timer.isPaused && timer.secondsUsed < timer.dailyLimitSeconds;
+  if (!changeInfo.url) return;
+  const url = changeInfo.url;
+  const isExtPage = (
+    url.startsWith("chrome://extensions") ||
+    url.startsWith("chrome://settings") ||
+    url.startsWith("edge://extensions") ||
+    url.startsWith("brave://extensions") ||
+    url.startsWith("about:addons")
+  );
+  if (!isExtPage) return;
 
-      if (!isActive && c.webhookUrl) {
-        fetch(c.webhookUrl, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "extensions_page_opened", ts: new Date().toISOString(),
-            message: "User opened browser extensions page while session was inactive",
-          }),
-        }).catch(() => {});
-      }
+  const c = await getCommitment();
+  if (!c.locked) return;
+
+  const timer = await getTimer();
+  const isActive = timer.sessionActive && !timer.isPaused && timer.secondsUsed < timer.dailyLimitSeconds;
+
+  if (c.webhookUrl) {
+    fetch(c.webhookUrl, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "extensions_page_opened", ts: new Date().toISOString(),
+        message: "User opened browser extensions page while session was inactive",
+      }),
+    }).catch(() => {});
+  }
+
+  if (!isActive) {
+    try {
+      chrome.windows.create({
+        url: chrome.runtime.getURL("escape.html"),
+        type: "popup",
+        width: 480,
+        height: 560,
+        focused: true,
+      });
+    } catch (_) {}
+
+    if (c.webhookUrl) {
+      fetch(c.webhookUrl, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: "escape_interrupt_shown", ts: new Date().toISOString() }),
+      }).catch(() => {});
     }
+
+    try { chrome.tabs.remove(tabId); } catch (_) {}
   }
 });
 
@@ -169,7 +224,7 @@ async function checkDailyReset() {
     await setPlatforms(p);
 
     timer.secondsUsed = 0; timer.sessionActive = false; timer.isPaused = false;
-    timer.lastResetDate = today;
+    timer.lastResetDate = today; timer.lastTickAt = null;
     await setTimer(timer);
 
     const meta = await getMeta();
@@ -194,10 +249,15 @@ async function tick() {
   meta.lastAliveTimestamp = Date.now();
   await setMeta(meta);
 
-  if (!timer.enabled || !timer.sessionActive || timer.isPaused) return;
+  if (!timer.enabled || !timer.sessionActive || timer.isPaused) {
+    // Keep lastTickAt current so we don't accumulate phantom time on resume
+    timer.lastTickAt = Date.now();
+    await setTimer(timer);
+    return;
+  }
 
   if (timer.secondsUsed >= timer.dailyLimitSeconds) {
-    timer.sessionActive = false; timer.isPaused = false;
+    timer.sessionActive = false; timer.isPaused = false; timer.lastTickAt = null;
     await setTimer(timer);
     broadcast({ type: "TIME_EXPIRED", timer });
     warned5 = false; warned1 = false;
@@ -205,18 +265,48 @@ async function tick() {
   }
 
   const platform = await getActivePlatform();
-  if (!platform) return;
+  if (!platform) {
+    timer.lastTickAt = Date.now();
+    await setTimer(timer);
+    return;
+  }
 
-  timer.secondsUsed += 1;
+  // Delta-time: compute real elapsed seconds since last tick
+  const now = Date.now();
+  const lastTick = timer.lastTickAt || now;
+  const rawDelta = Math.floor((now - lastTick) / 1000);
+  const deltaSeconds = Math.min(Math.max(rawDelta, 0), 120); // clamp [0..120]
+
+  const remBefore = timer.dailyLimitSeconds - timer.secondsUsed;
+  const add = Math.min(deltaSeconds, remBefore);
+  timer.secondsUsed += add;
+  timer.lastTickAt = now;
   await setTimer(timer);
 
   const platforms = await getPlatforms();
-  if (platforms[platform]) { platforms[platform].secondsUsed += 1; await setPlatforms(platforms); }
+  if (platforms[platform]) {
+    platforms[platform].secondsUsed = Math.min(
+      platforms[platform].secondsUsed + add,
+      timer.dailyLimitSeconds
+    );
+    await setPlatforms(platforms);
+  }
 
   const rem = timer.dailyLimitSeconds - timer.secondsUsed;
-  if (rem <= 300 && rem > 299 && !warned5) { warned5 = true; broadcast({ type: "FIVE_MIN_WARNING", timer }); }
-  if (rem <= 60 && rem > 59 && !warned1) { warned1 = true; broadcast({ type: "ONE_MIN_WARNING", timer }); }
-  if (timer.secondsUsed % 2 === 0) broadcast({ type: "STATE_UPDATE", timer, platforms });
+
+  // Threshold warnings — fire when remaining crosses below threshold (works with large deltas)
+  if (rem <= 300 && remBefore > 300 && !warned5) { warned5 = true; broadcast({ type: "FIVE_MIN_WARNING", timer }); }
+  if (rem <= 60 && remBefore > 60 && !warned1) { warned1 = true; broadcast({ type: "ONE_MIN_WARNING", timer }); }
+
+  if (rem <= 0) {
+    timer.sessionActive = false; timer.isPaused = false; timer.lastTickAt = null;
+    await setTimer(timer);
+    broadcast({ type: "TIME_EXPIRED", timer });
+    warned5 = false; warned1 = false;
+    return;
+  }
+
+  broadcast({ type: "STATE_UPDATE", timer, platforms });
 }
 
 async function getActivePlatform() {
@@ -281,8 +371,9 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         respond({
           timer, platforms,
           commitment: {
-            locked: c.locked, cooldownMinutes: c.cooldownMinutes,
+            locked: c.locked,
             pendingDisable: c.pendingDisable, webhookUrl: !!c.webhookUrl,
+            deterrenceLevel: c.deterrenceLevel || "off",
           },
           antiCircumvention: {
             streakDays: meta.streakDays, totalDaysUsed: meta.totalDaysUsed,
@@ -307,17 +398,22 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         break;
       }
 
-      // ── Passphrase verification (for popup gate) ────────
+      // ── Passphrase verification ──────────────────────────
       case "VERIFY_PASSPHRASE": {
         const c = await getCommitment();
         if (!c.locked || !c.passphraseHash) { respond({ valid: true }); break; }
         const hash = await hashPass(msg.passphrase);
         const valid = hash === c.passphraseHash;
-        if (!valid && c.webhookUrl) {
-          fetch(c.webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "unlock_attempt_failed", ts: new Date().toISOString() }) }).catch(() => {});
+        if (!valid) {
+          if (c.webhookUrl) {
+            fetch(c.webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ event: "unlock_attempt_failed", ts: new Date().toISOString() }) }).catch(() => {});
+          }
+          const deterMsg = getDeterrenceMessage(c.deterrenceLevel || "off");
+          respond({ valid: false, deterrenceMessage: deterMsg });
+        } else {
+          respond({ valid: true });
         }
-        respond({ valid });
         break;
       }
 
@@ -325,6 +421,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       case "START_SESSION": {
         if (timer.secondsUsed >= timer.dailyLimitSeconds) { respond({ success: false }); break; }
         timer.sessionActive = true; timer.isPaused = false;
+        timer.lastTickAt = Date.now();
         warned5 = false; warned1 = false;
         await setTimer(timer);
         broadcast({ type: "SESSION_STARTED", timer, platforms });
@@ -333,7 +430,9 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       }
 
       case "PAUSE_SESSION": {
-        timer.isPaused = true; await setTimer(timer);
+        timer.isPaused = true;
+        timer.lastTickAt = Date.now();
+        await setTimer(timer);
         broadcast({ type: "SESSION_PAUSED", timer, platforms });
         respond({ success: true, timer });
         break;
@@ -341,14 +440,18 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
       case "RESUME_SESSION": {
         if (timer.secondsUsed >= timer.dailyLimitSeconds) { respond({ success: false }); break; }
-        timer.isPaused = false; timer.sessionActive = true; await setTimer(timer);
+        timer.isPaused = false; timer.sessionActive = true;
+        timer.lastTickAt = Date.now();
+        await setTimer(timer);
         broadcast({ type: "SESSION_RESUMED", timer, platforms });
         respond({ success: true, timer });
         break;
       }
 
       case "STOP_SESSION": {
-        timer.sessionActive = false; timer.isPaused = false; await setTimer(timer);
+        timer.sessionActive = false; timer.isPaused = false;
+        timer.lastTickAt = null;
+        await setTimer(timer);
         broadcast({ type: "SESSION_STOPPED", timer, platforms });
         respond({ success: true, timer });
         break;
@@ -359,18 +462,19 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         const c = await getCommitment();
         const isActive = timer.sessionActive && !timer.isPaused && timer.secondsUsed < timer.dailyLimitSeconds;
 
-        // If commitment locked and NOT in active session, block changes
-        if (c.locked && !isActive) {
-          if (msg.settings.dailyLimitSeconds !== undefined && msg.settings.dailyLimitSeconds !== timer.dailyLimitSeconds) {
+        if (c.locked) {
+          // Block daily limit changes outside active session
+          if (msg.settings.dailyLimitSeconds !== undefined && msg.settings.dailyLimitSeconds !== timer.dailyLimitSeconds && !isActive) {
             respond({ success: false, reason: "commitment_locked" }); break;
           }
-          if (msg.settings.enabled === false) {
-            c.pendingDisable = Date.now(); await setCommitment(c);
+          // Block disabling outside active session — hard block, no cooldown
+          if (msg.settings.enabled === false && !isActive) {
             if (c.webhookUrl) {
               fetch(c.webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ event: "disable_attempted", ts: new Date().toISOString() }) }).catch(() => {});
             }
-            respond({ success: false, reason: "cooldown_started", cooldownMinutes: c.cooldownMinutes }); break;
+            const deterMsg = getDeterrenceMessage(c.deterrenceLevel || "off");
+            respond({ success: false, reason: "locked_outside_session", deterrenceMessage: deterMsg }); break;
           }
         }
 
@@ -388,7 +492,6 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         const c2 = await getCommitment();
         c2.locked = true; c2.passphraseHash = hash; c2.lockedAt = Date.now();
         if (msg.webhookUrl) c2.webhookUrl = msg.webhookUrl;
-        if (msg.cooldownMinutes) c2.cooldownMinutes = msg.cooldownMinutes;
         await setCommitment(c2);
         if (c2.webhookUrl) {
           fetch(c2.webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" },
@@ -406,26 +509,12 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
             fetch(c3.webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ event: "unlock_failed", ts: new Date().toISOString() }) }).catch(() => {});
           }
-          respond({ success: false, reason: "wrong_passphrase" }); break;
+          const deterMsg = getDeterrenceMessage(c3.deterrenceLevel || "off");
+          respond({ success: false, reason: "wrong_passphrase", deterrenceMessage: deterMsg }); break;
         }
         c3.locked = false; c3.passphraseHash = null; c3.pendingDisable = null;
         await setCommitment(c3);
         respond({ success: true });
-        break;
-      }
-
-      case "CHECK_PENDING": {
-        const c5 = await getCommitment();
-        if (!c5.pendingDisable) { respond({ ready: false, noPending: true }); break; }
-        const elapsed = (Date.now() - c5.pendingDisable) / 60000;
-        if (elapsed >= c5.cooldownMinutes) {
-          timer.enabled = false; await setTimer(timer);
-          c5.pendingDisable = null; await setCommitment(c5);
-          broadcast({ type: "SETTINGS_UPDATED", timer, platforms });
-          respond({ ready: true, timer });
-        } else {
-          respond({ ready: false, minutesLeft: Math.ceil(c5.cooldownMinutes - elapsed) });
-        }
         break;
       }
 
@@ -440,6 +529,17 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         break;
       }
 
+      // ── Deterrence settings ──────────────────────────────
+      case "SET_DETERRENCE": {
+        const c7 = await getCommitment();
+        const level = msg.level;
+        if (!["off","firm","hard"].includes(level)) { respond({ success: false }); break; }
+        c7.deterrenceLevel = level;
+        await setCommitment(c7);
+        respond({ success: true });
+        break;
+      }
+
       default: respond({ error: "unknown" });
     }
   })();
@@ -448,7 +548,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
 // ── Alarms ────────────────────────────────────────────────
 
-chrome.alarms.create("fs_tick", { periodInMinutes: 1 / 60 });
+chrome.alarms.create("fs_tick", { periodInMinutes: 0.5 });
 chrome.alarms.create("fs_reset", { periodInMinutes: 1 });
 chrome.alarms.create("fs_heartbeat", { periodInMinutes: 5 });
 

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Focus Shield — Escape Attempt</title>
+<link rel="stylesheet" href="escape.css">
+</head><body>
+
+<div class="card">
+  <div class="icon">🚨</div>
+  <div class="title">Escape Attempt Detected</div>
+  <div class="subtitle">
+    You opened the extensions page while Focus Shield is active and no session is running.
+    This attempt has been logged.
+  </div>
+
+  <div class="remaining-label">TIME REMAINING TODAY</div>
+  <div class="remaining-value" id="remainingTime">—</div>
+
+  <button class="session-btn" id="startSessionBtn">▶ Start a Session Instead</button>
+
+  <hr class="divider">
+
+  <div class="passphrase-label">UNLOCK WITH PASSPHRASE</div>
+  <input type="password" id="passphraseInput" placeholder="Enter commitment passphrase">
+
+  <button class="unlock-btn" id="unlockBtn" disabled>
+    Verify Passphrase
+    <span id="countdownSpan"></span>
+  </button>
+  <div class="countdown-note" id="countdownNote">Available in <span id="countdownSec">30</span>s</div>
+
+  <div class="err" id="errMsg"></div>
+  <div class="deterrence-msg" id="deterrenceMsg"></div>
+
+  <div class="close-note">You can close this window. Your extension remains active.</div>
+</div>
+
+<script src="escape.js"></script>
+</body></html>
