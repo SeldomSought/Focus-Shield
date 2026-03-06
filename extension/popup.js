@@ -20,6 +20,15 @@ const LIMITS = [
   { label: "45m", val: 2700 }, { label: "60m", val: 3600 },
 ];
 
+function showDeterrenceMessage(msg) {
+  if (!msg) return;
+  let el = $("deterrenceMsg");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = "block";
+  setTimeout(() => { el.style.display = "none"; }, 7000);
+}
+
 const $ = id => document.getElementById(id);
 const CIRC = 251.3;
 
@@ -171,6 +180,7 @@ $("gateBtn").addEventListener("click", () => {
       $("gateErr").innerHTML = "";
     } else {
       $("gateErr").innerHTML = '<div class="err">Wrong passphrase. Attempt logged.</div>';
+      if (r?.deterrenceMessage) showDeterrenceMessage(r.deterrenceMessage);
     }
   });
 });
@@ -221,9 +231,10 @@ $("master").addEventListener("change", (e) => {
     else if (r?.reason === "commitment_locked") {
       e.target.checked = true;
     }
-    else if (r?.reason === "cooldown_started") {
+    else if (r?.reason === "locked_outside_session") {
       e.target.checked = true;
-      $("status").textContent = `Cooldown started: ${r.cooldownMinutes} min wait required`;
+      showDeterrenceMessage(r.deterrenceMessage ||
+        "Protection is active. Start a session or use your passphrase to make changes.");
     }
   });
 });
@@ -323,7 +334,16 @@ function buildLockUI() {
     badge.className = "badge badge-on";
     badge.textContent = "ACTIVE";
 
-    let html = `<p class="info">🔒 Protection active. Settings require the passphrase or an active session.</p>`;
+    const deterLevel = state.commitment?.deterrenceLevel || "off";
+    let html = `<p class="info">🔒 Protection active. Settings require the passphrase or an active session.</p>
+      <div class="row" style="margin-top:6px">
+        <div><div class="row-label" style="font-size:11px">Coach messages</div><div class="row-sub">Shown on failed disable attempts</div></div>
+        <select id="deterrenceSelect" class="inp" style="width:auto;padding:4px 6px;margin:0">
+          <option value="off"${deterLevel==="off"?" selected":""}>Off</option>
+          <option value="firm"${deterLevel==="firm"?" selected":""}>Firm</option>
+          <option value="hard"${deterLevel==="hard"?" selected":""}>Hard</option>
+        </select>
+      </div>`;
 
     if (c.pendingDisable) {
       html += `<div class="cooldown"><p>⏳ Disable request pending. Cooldown: ${c.cooldownMinutes} min.</p>
@@ -350,9 +370,17 @@ function buildLockUI() {
           buildLockUI();
         } else {
           $("lockErr").innerHTML = '<div class="err">Wrong passphrase. Attempt logged & reported.</div>';
+          if (r?.deterrenceMessage) showDeterrenceMessage(r.deterrenceMessage);
         }
       });
     });
+
+    if ($("deterrenceSelect")) {
+      $("deterrenceSelect").addEventListener("change", (e) => {
+        chrome.runtime.sendMessage({ type: "SET_DETERRENCE", level: e.target.value });
+        if (state.commitment) state.commitment.deterrenceLevel = e.target.value;
+      });
+    }
 
     if (c.pendingDisable && $("checkCooldown")) {
       $("checkCooldown").addEventListener("click", () => {
