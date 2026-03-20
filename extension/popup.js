@@ -345,11 +345,6 @@ function buildLockUI() {
         </select>
       </div>`;
 
-    if (c.pendingDisable) {
-      html += `<div class="cooldown"><p>⏳ Disable request pending. Cooldown: ${c.cooldownMinutes} min.</p>
-        <button id="checkCooldown" class="lbtn lbtn-off" style="margin-top:4px">Check Status</button></div>`;
-    }
-
     html += `<input type="password" class="inp" id="unlockPass" placeholder="Enter passphrase to remove lock">
       <button id="unlockBtn" class="lbtn lbtn-off">🔓 Remove Commitment Lock</button>
       <div id="lockErr"></div>`;
@@ -382,15 +377,6 @@ function buildLockUI() {
       });
     }
 
-    if (c.pendingDisable && $("checkCooldown")) {
-      $("checkCooldown").addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "CHECK_PENDING" }, (r) => {
-          if (r?.ready) { state.timer = r.timer; render(); }
-          else if (r?.minutesLeft) { $("status").textContent = `${r.minutesLeft} min remaining in cooldown`; }
-          else { $("status").textContent = "No pending disable request"; }
-        });
-      });
-    }
   } else {
     badge.className = "badge badge-off";
     badge.textContent = "OFF";
