@@ -159,7 +159,6 @@ async function detectTampering() {
 // Detect when user opens chrome://extensions or settings while locked
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (!changeInfo.url) return;
   const url = changeInfo.url;
   const isExtPage = (
     url.startsWith("chrome://extensions") ||
@@ -206,7 +205,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
     try { chrome.tabs.remove(tabId); } catch (_) {}
   }
-});
+}, { properties: ["url"] });
 
 // ── Daily Reset ───────────────────────────────────────────
 

@@ -255,9 +255,11 @@
   function startLockedClassGuard() {
     applyLockedClass();
     if (_lockedClassObserver) return;
+    let _observerRaf = null;
     _lockedClassObserver = new MutationObserver(() => {
-      // Re-add class if it was stripped while we're still locked
-      applyLockedClass();
+      // Re-add class if it was stripped while we're still locked (debounced to 1 rAF)
+      if (_observerRaf) return;
+      _observerRaf = requestAnimationFrame(() => { _observerRaf = null; applyLockedClass(); });
     });
     const targets = [document.body, document.documentElement].filter(Boolean);
     for (const t of targets) {
@@ -415,7 +417,9 @@
     if (state) updateUI(state.timer);
   }
 
-  if (document.body) init();
-  else document.addEventListener("DOMContentLoaded", init);
-  window.addEventListener("load", () => setTimeout(init, 500));
+  let _initDone = false;
+  function tryInit() { if (!_initDone) { _initDone = true; init(); } }
+  if (document.body) tryInit();
+  else document.addEventListener("DOMContentLoaded", tryInit);
+  window.addEventListener("load", () => setTimeout(tryInit, 500));
 })();
