@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Focus Shield",
   "description": "Strip social media down to bookmarks & posting. 30 min/day consumption limit across Twitter, Reddit, YouTube, Instagram & Facebook.",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "permissions": [
     "storage",
     "alarms",
