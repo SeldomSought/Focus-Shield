@@ -103,6 +103,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
   meta.lastAliveTimestamp = Date.now();
   await setMeta(meta);
+  // Reset enabled on install/update so stale storage can't keep blocking off
+  const timer = await getTimer();
+  timer.enabled = true;
+  await setTimer(timer);
   // Recreate alarms on install/update
   chrome.alarms.create("fs_tick", { periodInMinutes: 0.5 });
   chrome.alarms.create("fs_reset", { periodInMinutes: 1 });
@@ -114,6 +118,10 @@ chrome.runtime.onStartup.addListener(async () => {
   const meta = await getMeta();
   meta.lastAliveTimestamp = Date.now();
   await setMeta(meta);
+  // Always enforce blocking on startup — the master toggle must never
+  // permanently disable protection across browser restarts.
+  const timer = await getTimer();
+  if (!timer.enabled) { timer.enabled = true; await setTimer(timer); }
 });
 
 // ── Tamper Detection ──────────────────────────────────────
