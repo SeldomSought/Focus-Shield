@@ -102,6 +102,61 @@
     document.getElementById("fs-btn-start").addEventListener("click", () => send("START_SESSION"));
     document.getElementById("fs-btn-pause").addEventListener("click", () => send("PAUSE_SESSION"));
     document.getElementById("fs-btn-stop").addEventListener("click", () => send("STOP_SESSION"));
+    makeDraggable(el);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DRAGGABLE PILL
+  // ═══════════════════════════════════════════════════════════════
+
+  function makeDraggable(el) {
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+    // Restore saved position from previous session
+    try {
+      chrome.storage.local.get("fs_pill_pos", r => {
+        if (chrome.runtime.lastError || !r.fs_pill_pos) return;
+        el.style.right = "auto";
+        el.style.left = r.fs_pill_pos.left;
+        el.style.top = r.fs_pill_pos.top;
+      });
+    } catch {}
+
+    el.addEventListener("mousedown", e => {
+      // Ignore right-clicks and clicks on the control buttons
+      if (e.button !== 0 || e.target.closest("button")) return;
+      dragging = true;
+      const rect = el.getBoundingClientRect();
+      // Convert right-anchored default position to left-anchored for dragging
+      el.style.right = "auto";
+      el.style.left = rect.left + "px";
+      el.style.top = rect.top + "px";
+      origLeft = rect.left;
+      origTop = rect.top;
+      startX = e.clientX;
+      startY = e.clientY;
+      el.style.transition = "none";
+      el.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      const x = Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, origLeft + (e.clientX - startX)));
+      const y = Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, origTop + (e.clientY - startY)));
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.transition = "";
+      el.style.cursor = "grab";
+      try {
+        chrome.storage.local.set({ fs_pill_pos: { left: el.style.left, top: el.style.top } });
+      } catch {}
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -188,7 +243,7 @@
     const remaining = Math.max(0, timer.dailyLimitSeconds - timer.secondsUsed);
     const isExpired = remaining <= 0;
     const isActive = timer.sessionActive && !timer.isPaused && !isExpired;
-    const feedUnlocked = !timer.enabled || isActive;
+    const feedUnlocked = isActive;  // enabled flag is intentionally ignored
 
     if (feedUnlocked) { hideOverlay(); return; }
 
@@ -269,7 +324,7 @@
       const remaining = Math.max(0, _currentTimer.dailyLimitSeconds - _currentTimer.secondsUsed);
       const isExpired = remaining <= 0;
       const isActive = _currentTimer.sessionActive && !_currentTimer.isPaused && !isExpired;
-      if (!_currentTimer.enabled || isActive) { stopLockHeartbeat(); return; }
+      if (isActive) { stopLockHeartbeat(); return; }
 
       if (window.FocusShield.isFeedPage()) {
         const ov = document.getElementById("fs-lock-overlay");
@@ -328,7 +383,10 @@
     const isExpired = remaining <= 0;
     const isActive = timer.sessionActive && !timer.isPaused && !isExpired;
     const isPaused = timer.sessionActive && timer.isPaused;
-    const feedUnlocked = !timer.enabled || isActive;
+    // Ignore timer.enabled — blocking is always on. The 30-min session
+    // is the only escape hatch. The master toggle in the popup can be
+    // disabled/removed; it must never bypass the lock.
+    const feedUnlocked = isActive;
 
     // Apply/remove fs-locked body class for CSS rules
     if (feedUnlocked) {
@@ -425,7 +483,7 @@
     if (document.getElementById("fs-own-styles")) return;
     const el = document.createElement("style"); el.id = "fs-own-styles";
     el.textContent = `
-#fs-timer-overlay{position:fixed;top:12px;right:12px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;font-size:13px;user-select:none}
+#fs-timer-overlay{position:fixed;top:12px;right:12px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;font-size:13px;user-select:none;cursor:grab}
 #fs-timer-pill{display:flex;align-items:center;gap:8px;background:rgba(10,10,14,.88);backdrop-filter:blur(16px);padding:6px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.08);box-shadow:0 4px 20px rgba(0,0,0,.4);color:#e7e9ea;transition:all .2s}
 #fs-timer-pill:hover{border-color:rgba(255,255,255,.15)}
 .fs-dot-active,.fs-dot-idle,.fs-dot-paused,.fs-dot-expired{width:7px;height:7px;border-radius:50%;flex-shrink:0}
