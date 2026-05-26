@@ -6,13 +6,10 @@
   window.FocusShield.isAllowedPage = function () {
     const p = window.location.pathname;
     if (p.startsWith("/i/bookmarks")) return true;
-    if (p.includes("/compose")) return true;
-    if (p.startsWith("/settings")) return true;
+    if (p.startsWith("/compose")) return true;
+    if (p.startsWith("/intent/tweet")) return true;
+    // Individual tweet pages — reachable from bookmarks
     if (/^\/[^/]+\/status\/\d+/.test(p)) return true;
-    if (p.startsWith("/intent/")) return true;
-    if (/^\/[a-zA-Z0-9_]+\/?$/.test(p) &&
-        !["/","/home","/explore","/search","/notifications","/messages"].includes(p)) return true;
-    if (/^\/[a-zA-Z0-9_]+\/(followers|following|likes|media|with_replies)/.test(p)) return true;
     return false;
   };
 

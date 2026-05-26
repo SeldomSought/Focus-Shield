@@ -7,10 +7,7 @@
     const p = window.location.pathname;
     if (p.includes("/saved")) return true;
     if (p.includes("/submit")) return true;
-    if (p.includes("/comments/")) return true;
-    if (p.startsWith("/user/")) return true;
-    if (p.startsWith("/settings")) return true;
-    if (p.startsWith("/account")) return true;
+    // Comment threads — accessible by clicking a saved post
     if (/^\/r\/[^/]+\/comments\//.test(p)) return true;
     return false;
   };

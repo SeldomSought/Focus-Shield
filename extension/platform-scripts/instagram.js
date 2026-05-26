@@ -97,19 +97,8 @@
     const p = window.location.pathname;
     if (p.includes("/saved")) return true;
     if (p.startsWith("/create")) return true;
-    if (p.startsWith("/p/")) return true;
-    if (p.startsWith("/reel/")) return true;
-    if (p.startsWith("/stories/")) return true;
-    if (p.startsWith("/accounts/")) return true;
-    if (p.startsWith("/direct/t/")) return true;
-    // Profile pages
-    const systemRoutes = ["/", "/home", "/explore", "/reels", "/direct"];
-    if (/^\/[a-zA-Z0-9._]+\/?$/.test(p)) {
-      const clean = p.replace(/\/$/, "");
-      if (!systemRoutes.includes(clean)) return true;
-    }
-    // Profile sub-pages
-    if (/^\/[a-zA-Z0-9._]+\/(followers|following|tagged|saved|reels)\/?/.test(p)) return true;
+    // Fallback redirect target when username not yet detected — allowed so we don't loop
+    if (p.startsWith("/accounts/edit")) return true;
     return false;
   };
 
@@ -131,52 +120,35 @@
   window.FocusShield.onLocked = function (isExpired, remaining) {
     const p = window.location.pathname;
 
-    // Blocked → redirect to saved
-    if (window.FocusShield.isBlockedPage()) {
-      window.location.replace(getSavedUrl());
-      return true; // handled
-    }
-
-    // Allowed → do nothing
+    // Allowed page — but if we're on the /accounts/edit/ fallback, try to
+    // advance to the saved page once Instagram's nav has had time to render.
     if (window.FocusShield.isAllowedPage()) {
-      return true; // handled (no overlay needed)
-    }
-
-    // Feed → redirect to saved (no overlay!)
-    if (window.FocusShield.isFeedPage()) {
-      // Try to detect username first. If page hasn't loaded yet, wait and retry.
-      const url = getSavedUrl();
-      if (url === "/accounts/edit/") {
-        // Username not found yet. Wait for nav to render, then try again.
-        waitForUsername(() => {
-          window.location.replace(getSavedUrl());
-        });
-      } else {
-        window.location.replace(url);
+      if (p.startsWith("/accounts/edit")) {
+        redirectToSavedWhenReady();
       }
-      return true; // handled
+      return true;
     }
 
-    return true; // handled (unknown page — don't show overlay)
+    // Not on an allowed page — redirect immediately, no waiting.
+    window.location.replace(getSavedUrl());
+    return true;
   };
 
-  // Wait for Instagram's nav to render so we can detect the username
-  function waitForUsername(callback) {
+  // After landing on /accounts/edit/ (fallback), poll for username and
+  // advance to the saved page as soon as Instagram's nav renders.
+  function redirectToSavedWhenReady() {
     let attempts = 0;
-    const tryDetect = () => {
+    const check = () => {
       attempts++;
-      const u = detectUsername();
-      if (u) {
-        callback();
-      } else if (attempts < 20) {
-        setTimeout(tryDetect, 300);
-      } else {
-        // Give up — redirect to settings page as fallback
-        callback();
+      const url = getSavedUrl();
+      if (!url.startsWith("/accounts/edit")) {
+        window.location.replace(url);
+      } else if (attempts < 15) {
+        setTimeout(check, 400);
       }
+      // Give up after ~6 s — user stays on /accounts/edit/ (settings page, not feed)
     };
-    // Give Instagram a moment to render
-    setTimeout(tryDetect, 500);
+    setTimeout(check, 400);
   }
 
   // ── Allowed links (for other UI that might use them) ────

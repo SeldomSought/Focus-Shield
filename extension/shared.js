@@ -46,12 +46,25 @@
 
   function getState() {
     return new Promise(resolve => {
-      try {
-        chrome.runtime.sendMessage({ type: "GET_STATE" }, r => {
-          if (chrome.runtime.lastError) { resolve(null); return; }
-          resolve(r);
-        });
-      } catch { resolve(null); }
+      let attempts = 0;
+      function attempt() {
+        attempts++;
+        try {
+          chrome.runtime.sendMessage({ type: "GET_STATE" }, r => {
+            if (chrome.runtime.lastError || !r) {
+              // Service worker may be cold-starting — retry up to 3 times
+              if (attempts < 3) { setTimeout(attempt, 400); }
+              else { resolve(null); }
+              return;
+            }
+            resolve(r);
+          });
+        } catch {
+          if (attempts < 3) { setTimeout(attempt, 400); }
+          else { resolve(null); }
+        }
+      }
+      attempt();
     });
   }
 
@@ -84,7 +97,8 @@
           <button id="fs-btn-stop" class="fs-btn fs-btn-stop" title="Stop" style="display:none">■</button>
         </div>
       </div>`;
-    document.body.appendChild(el);
+    // Append to <html>, not <body> — keeps it outside React's managed subtree
+    document.documentElement.appendChild(el);
     document.getElementById("fs-btn-start").addEventListener("click", () => send("START_SESSION"));
     document.getElementById("fs-btn-pause").addEventListener("click", () => send("PAUSE_SESSION"));
     document.getElementById("fs-btn-stop").addEventListener("click", () => send("STOP_SESSION"));
@@ -112,7 +126,8 @@
     if (!ov) {
       ov = document.createElement("div");
       ov.id = "fs-lock-overlay";
-      document.body.appendChild(ov);
+      // Append to <html>, not <body> — keeps it outside React's managed subtree
+      document.documentElement.appendChild(ov);
     }
     ov.style.display = "flex";
 
@@ -212,8 +227,9 @@
       return;
     }
 
-    // Unknown — don't block
+    // Unknown page — default-block by redirecting to saved
     hideOverlay();
+    window.location.replace(window.FocusShield.getSavedUrl());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -235,6 +251,39 @@
 
   function stopUrlWatcher() {
     if (_urlWatcher) { clearInterval(_urlWatcher); _urlWatcher = null; }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOCK HEARTBEAT — re-enforces blocking every 1.5s when locked.
+  // Needed because timer ticks don't broadcast when no session is
+  // active, so updateUI() is never called while locked. Without this,
+  // the overlay can be removed by React with no mechanism to re-add it.
+  // ═══════════════════════════════════════════════════════════════
+
+  let _lockHeartbeat = null;
+
+  function startLockHeartbeat() {
+    if (_lockHeartbeat) return;
+    _lockHeartbeat = setInterval(() => {
+      if (!_currentTimer) return;
+      const remaining = Math.max(0, _currentTimer.dailyLimitSeconds - _currentTimer.secondsUsed);
+      const isExpired = remaining <= 0;
+      const isActive = _currentTimer.sessionActive && !_currentTimer.isPaused && !isExpired;
+      if (!_currentTimer.enabled || isActive) { stopLockHeartbeat(); return; }
+
+      if (window.FocusShield.isFeedPage()) {
+        const ov = document.getElementById("fs-lock-overlay");
+        if (!ov || ov.style.display === "none") {
+          // Overlay missing or hidden — force re-evaluation
+          _lastEvalUrl = null;
+          doEval();
+        }
+      }
+    }, 1500);
+  }
+
+  function stopLockHeartbeat() {
+    if (_lockHeartbeat) { clearInterval(_lockHeartbeat); _lockHeartbeat = null; }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -284,8 +333,10 @@
     // Apply/remove fs-locked body class for CSS rules
     if (feedUnlocked) {
       removeLockedClass();
+      stopLockHeartbeat();
     } else {
       startLockedClassGuard();
+      startLockHeartbeat();
     }
 
     // STATE TRANSITIONS
@@ -414,7 +465,16 @@
     if (document.body) ensureTimerPill();
     else document.addEventListener("DOMContentLoaded", ensureTimerPill);
     const state = await getState();
-    if (state) updateUI(state.timer);
+    if (state) {
+      updateUI(state.timer);
+    } else {
+      // Background unreachable — assume locked so protection still enforces
+      updateUI({
+        secondsUsed: 0, dailyLimitSeconds: 1800,
+        sessionActive: false, isPaused: false, enabled: true, lastTickAt: null,
+        lastResetDate: new Date().toISOString().split("T")[0],
+      });
+    }
   }
 
   let _initDone = false;
