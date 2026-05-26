@@ -97,19 +97,6 @@
     const p = window.location.pathname;
     if (p.includes("/saved")) return true;
     if (p.startsWith("/create")) return true;
-    if (p.startsWith("/p/")) return true;
-    if (p.startsWith("/reel/")) return true;
-    if (p.startsWith("/stories/")) return true;
-    if (p.startsWith("/accounts/")) return true;
-    if (p.startsWith("/direct/t/")) return true;
-    // Profile pages
-    const systemRoutes = ["/", "/home", "/explore", "/reels", "/direct"];
-    if (/^\/[a-zA-Z0-9._]+\/?$/.test(p)) {
-      const clean = p.replace(/\/$/, "");
-      if (!systemRoutes.includes(clean)) return true;
-    }
-    // Profile sub-pages
-    if (/^\/[a-zA-Z0-9._]+\/(followers|following|tagged|saved|reels)\/?/.test(p)) return true;
     return false;
   };
 
@@ -129,35 +116,19 @@
   // ── Lock behavior: REDIRECT, no overlay ─────────────────
 
   window.FocusShield.onLocked = function (isExpired, remaining) {
-    const p = window.location.pathname;
-
-    // Blocked → redirect to saved
-    if (window.FocusShield.isBlockedPage()) {
-      window.location.replace(getSavedUrl());
-      return true; // handled
-    }
-
     // Allowed → do nothing
     if (window.FocusShield.isAllowedPage()) {
-      return true; // handled (no overlay needed)
+      return true;
     }
 
-    // Feed → redirect to saved (no overlay!)
-    if (window.FocusShield.isFeedPage()) {
-      // Try to detect username first. If page hasn't loaded yet, wait and retry.
-      const url = getSavedUrl();
-      if (url === "/accounts/edit/") {
-        // Username not found yet. Wait for nav to render, then try again.
-        waitForUsername(() => {
-          window.location.replace(getSavedUrl());
-        });
-      } else {
-        window.location.replace(url);
-      }
-      return true; // handled
+    // Everything else → redirect to saved (feed, blocked, unknown — all redirect)
+    const url = getSavedUrl();
+    if (url === "/accounts/edit/") {
+      waitForUsername(() => { window.location.replace(getSavedUrl()); });
+    } else {
+      window.location.replace(url);
     }
-
-    return true; // handled (unknown page — don't show overlay)
+    return true;
   };
 
   // Wait for Instagram's nav to render so we can detect the username

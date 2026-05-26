@@ -14,15 +14,13 @@
 
   window.FocusShield.isAllowedPage = function () {
     const p = window.location.pathname;
+    // Watch a specific video (reachable from library/watch-later)
     if (p.startsWith("/watch")) return true;
-    if (p.startsWith("/playlist")) return true;
+    // Library and watch-later playlist
     if (p.startsWith("/feed/library")) return true;
-    if (p.startsWith("/feed/history")) return true;
-    if (p.startsWith("/feed/playlists")) return true;
-    if (p.includes("/playlists")) return true;
+    if (p.startsWith("/playlist")) return true;
+    // Create / upload
     if (p.startsWith("/upload") || p.startsWith("/create") || p.startsWith("/studio")) return true;
-    if (p.startsWith("/@") || p.startsWith("/channel/") || p.startsWith("/c/")) return true;
-    if (p.startsWith("/account")) return true;
     return false;
   };
 

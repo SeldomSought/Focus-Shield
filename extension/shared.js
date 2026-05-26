@@ -46,12 +46,25 @@
 
   function getState() {
     return new Promise(resolve => {
-      try {
-        chrome.runtime.sendMessage({ type: "GET_STATE" }, r => {
-          if (chrome.runtime.lastError) { resolve(null); return; }
-          resolve(r);
-        });
-      } catch { resolve(null); }
+      let attempts = 0;
+      function attempt() {
+        attempts++;
+        try {
+          chrome.runtime.sendMessage({ type: "GET_STATE" }, r => {
+            if (chrome.runtime.lastError || !r) {
+              // Service worker may be cold-starting — retry up to 3 times
+              if (attempts < 3) { setTimeout(attempt, 400); }
+              else { resolve(null); }
+              return;
+            }
+            resolve(r);
+          });
+        } catch {
+          if (attempts < 3) { setTimeout(attempt, 400); }
+          else { resolve(null); }
+        }
+      }
+      attempt();
     });
   }
 
@@ -212,8 +225,9 @@
       return;
     }
 
-    // Unknown — don't block
+    // Unknown page — default-block by redirecting to saved
     hideOverlay();
+    window.location.replace(window.FocusShield.getSavedUrl());
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -414,7 +428,16 @@
     if (document.body) ensureTimerPill();
     else document.addEventListener("DOMContentLoaded", ensureTimerPill);
     const state = await getState();
-    if (state) updateUI(state.timer);
+    if (state) {
+      updateUI(state.timer);
+    } else {
+      // Background unreachable — assume locked so protection still enforces
+      updateUI({
+        secondsUsed: 0, dailyLimitSeconds: 1800,
+        sessionActive: false, isPaused: false, enabled: true, lastTickAt: null,
+        lastResetDate: new Date().toISOString().split("T")[0],
+      });
+    }
   }
 
   let _initDone = false;
