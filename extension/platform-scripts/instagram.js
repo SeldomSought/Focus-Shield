@@ -97,6 +97,8 @@
     const p = window.location.pathname;
     if (p.includes("/saved")) return true;
     if (p.startsWith("/create")) return true;
+    // Fallback redirect target when username not yet detected — allowed so we don't loop
+    if (p.startsWith("/accounts/edit")) return true;
     return false;
   };
 
@@ -116,38 +118,37 @@
   // ── Lock behavior: REDIRECT, no overlay ─────────────────
 
   window.FocusShield.onLocked = function (isExpired, remaining) {
-    // Allowed → do nothing
+    const p = window.location.pathname;
+
+    // Allowed page — but if we're on the /accounts/edit/ fallback, try to
+    // advance to the saved page once Instagram's nav has had time to render.
     if (window.FocusShield.isAllowedPage()) {
+      if (p.startsWith("/accounts/edit")) {
+        redirectToSavedWhenReady();
+      }
       return true;
     }
 
-    // Everything else → redirect to saved (feed, blocked, unknown — all redirect)
-    const url = getSavedUrl();
-    if (url === "/accounts/edit/") {
-      waitForUsername(() => { window.location.replace(getSavedUrl()); });
-    } else {
-      window.location.replace(url);
-    }
+    // Not on an allowed page — redirect immediately, no waiting.
+    window.location.replace(getSavedUrl());
     return true;
   };
 
-  // Wait for Instagram's nav to render so we can detect the username
-  function waitForUsername(callback) {
+  // After landing on /accounts/edit/ (fallback), poll for username and
+  // advance to the saved page as soon as Instagram's nav renders.
+  function redirectToSavedWhenReady() {
     let attempts = 0;
-    const tryDetect = () => {
+    const check = () => {
       attempts++;
-      const u = detectUsername();
-      if (u) {
-        callback();
-      } else if (attempts < 20) {
-        setTimeout(tryDetect, 300);
-      } else {
-        // Give up — redirect to settings page as fallback
-        callback();
+      const url = getSavedUrl();
+      if (!url.startsWith("/accounts/edit")) {
+        window.location.replace(url);
+      } else if (attempts < 15) {
+        setTimeout(check, 400);
       }
+      // Give up after ~6 s — user stays on /accounts/edit/ (settings page, not feed)
     };
-    // Give Instagram a moment to render
-    setTimeout(tryDetect, 500);
+    setTimeout(check, 400);
   }
 
   // ── Allowed links (for other UI that might use them) ────

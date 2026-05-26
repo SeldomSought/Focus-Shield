@@ -97,7 +97,8 @@
           <button id="fs-btn-stop" class="fs-btn fs-btn-stop" title="Stop" style="display:none">■</button>
         </div>
       </div>`;
-    document.body.appendChild(el);
+    // Append to <html>, not <body> — keeps it outside React's managed subtree
+    document.documentElement.appendChild(el);
     document.getElementById("fs-btn-start").addEventListener("click", () => send("START_SESSION"));
     document.getElementById("fs-btn-pause").addEventListener("click", () => send("PAUSE_SESSION"));
     document.getElementById("fs-btn-stop").addEventListener("click", () => send("STOP_SESSION"));
@@ -125,7 +126,8 @@
     if (!ov) {
       ov = document.createElement("div");
       ov.id = "fs-lock-overlay";
-      document.body.appendChild(ov);
+      // Append to <html>, not <body> — keeps it outside React's managed subtree
+      document.documentElement.appendChild(ov);
     }
     ov.style.display = "flex";
 
@@ -252,6 +254,39 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // LOCK HEARTBEAT — re-enforces blocking every 1.5s when locked.
+  // Needed because timer ticks don't broadcast when no session is
+  // active, so updateUI() is never called while locked. Without this,
+  // the overlay can be removed by React with no mechanism to re-add it.
+  // ═══════════════════════════════════════════════════════════════
+
+  let _lockHeartbeat = null;
+
+  function startLockHeartbeat() {
+    if (_lockHeartbeat) return;
+    _lockHeartbeat = setInterval(() => {
+      if (!_currentTimer) return;
+      const remaining = Math.max(0, _currentTimer.dailyLimitSeconds - _currentTimer.secondsUsed);
+      const isExpired = remaining <= 0;
+      const isActive = _currentTimer.sessionActive && !_currentTimer.isPaused && !isExpired;
+      if (!_currentTimer.enabled || isActive) { stopLockHeartbeat(); return; }
+
+      if (window.FocusShield.isFeedPage()) {
+        const ov = document.getElementById("fs-lock-overlay");
+        if (!ov || ov.style.display === "none") {
+          // Overlay missing or hidden — force re-evaluation
+          _lastEvalUrl = null;
+          doEval();
+        }
+      }
+    }, 1500);
+  }
+
+  function stopLockHeartbeat() {
+    if (_lockHeartbeat) { clearInterval(_lockHeartbeat); _lockHeartbeat = null; }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // FS-LOCKED CLASS — applied to body + documentElement when locked
   // ═══════════════════════════════════════════════════════════════
 
@@ -298,8 +333,10 @@
     // Apply/remove fs-locked body class for CSS rules
     if (feedUnlocked) {
       removeLockedClass();
+      stopLockHeartbeat();
     } else {
       startLockedClassGuard();
+      startLockHeartbeat();
     }
 
     // STATE TRANSITIONS
