@@ -39,9 +39,8 @@
   //
   // Returns:
   //   { platform, surface: "allowed"|"blocked"|"neutral",
-  //     reason, allowedReferenceUrl, allowedReferenceLabel }
-  //
-  // No redirectUrl field — the overlay buttons handle navigation.
+  //     reason, allowedReferenceUrl, allowedReferenceLabel,
+  //     creationUrl, creationLabel }
 
   function classifyUrl(urlStr) {
     let url;
@@ -54,72 +53,122 @@
 
     // ── X / Twitter ────────────────────────────────────────────
     if (host === "x.com" || host === "twitter.com") {
-      const ref = { allowedReferenceUrl: "https://x.com/i/bookmarks", allowedReferenceLabel: "Bookmarks" };
+      const composeHost = host === "twitter.com" ? "twitter.com" : "x.com";
+      const extras = {
+        allowedReferenceUrl:   "https://x.com/i/bookmarks",
+        allowedReferenceLabel: "Bookmarks",
+        creationUrl:           `https://${composeHost}/compose/post`,
+        creationLabel:         "Compose Post",
+      };
 
-      // Always allow
-      if (path.startsWith("/i/bookmarks"))       return { platform:"x", surface:"allowed", reason:"bookmarks", ...ref };
-      if (path.startsWith("/compose"))            return { platform:"x", surface:"allowed", reason:"compose", ...ref };
-      if (path.startsWith("/intent/tweet"))       return { platform:"x", surface:"allowed", reason:"intent", ...ref };
-      if (path.startsWith("/messages"))           return { platform:"x", surface:"allowed", reason:"messages", ...ref };
-      if (/^\/[^/]+\/status\/\d+/.test(path))    return { platform:"x", surface:"allowed", reason:"status page", ...ref };
+      if (path.startsWith("/i/bookmarks"))       return { platform:"x", surface:"allowed", reason:"bookmarks", ...extras };
+      if (path.startsWith("/compose"))            return { platform:"x", surface:"allowed", reason:"compose", ...extras };
+      if (path.startsWith("/intent/tweet"))       return { platform:"x", surface:"allowed", reason:"intent", ...extras };
+      if (path.startsWith("/messages"))           return { platform:"x", surface:"allowed", reason:"messages", ...extras };
+      if (/^\/[^/]+\/status\/\d+/.test(path))    return { platform:"x", surface:"allowed", reason:"status page", ...extras };
 
-      // Block
-      if (path === "/" || path === "")            return { platform:"x", surface:"blocked", reason:"home feed", ...ref };
-      if (path.startsWith("/home"))               return { platform:"x", surface:"blocked", reason:"home feed", ...ref };
-      if (path.startsWith("/explore"))            return { platform:"x", surface:"blocked", reason:"explore", ...ref };
-      if (path.startsWith("/notifications"))      return { platform:"x", surface:"blocked", reason:"notifications", ...ref };
-      if (path.startsWith("/search"))             return { platform:"x", surface:"blocked", reason:"search", ...ref };
+      if (path === "/" || path === "")            return { platform:"x", surface:"blocked", reason:"home feed", ...extras };
+      if (path.startsWith("/home"))               return { platform:"x", surface:"blocked", reason:"home feed", ...extras };
+      if (path.startsWith("/explore"))            return { platform:"x", surface:"blocked", reason:"explore", ...extras };
+      if (path.startsWith("/notifications"))      return { platform:"x", surface:"blocked", reason:"notifications", ...extras };
+      if (path.startsWith("/search"))             return { platform:"x", surface:"blocked", reason:"search", ...extras };
 
-      // Profile pages and everything else — neutral (allow)
-      return { platform:"x", surface:"neutral", reason:"profile or other", ...ref };
+      return { platform:"x", surface:"neutral", reason:"profile or other", ...extras };
     }
 
     // ── YouTube ────────────────────────────────────────────────
     if (host === "youtube.com" || host === "studio.youtube.com") {
-      const ref = { allowedReferenceUrl: "https://www.youtube.com/feed/history", allowedReferenceLabel: "History" };
+      const extras = {
+        allowedReferenceUrl:   "https://www.youtube.com/feed/history",
+        allowedReferenceLabel: "History",
+        creationUrl:           "https://www.youtube.com/upload",
+        creationLabel:         "Upload Video",
+      };
 
-      if (host === "studio.youtube.com")           return { platform:"youtube", surface:"allowed", reason:"studio", ...ref };
+      if (host === "studio.youtube.com")           return { platform:"youtube", surface:"allowed", reason:"studio", ...extras };
 
-      // Always allow
-      if (path.startsWith("/watch"))               return { platform:"youtube", surface:"allowed", reason:"watch", ...ref };
-      if (path.startsWith("/feed/history"))        return { platform:"youtube", surface:"allowed", reason:"history", ...ref };
-      if (path.startsWith("/playlist"))            return { platform:"youtube", surface:"allowed", reason:"playlist", ...ref };
-      if (path.startsWith("/upload"))              return { platform:"youtube", surface:"allowed", reason:"upload", ...ref };
-      if (path.startsWith("/create"))              return { platform:"youtube", surface:"allowed", reason:"create", ...ref };
+      if (path.startsWith("/watch"))               return { platform:"youtube", surface:"allowed", reason:"watch", ...extras };
+      if (path.startsWith("/feed/history"))        return { platform:"youtube", surface:"allowed", reason:"history", ...extras };
+      if (path.startsWith("/playlist"))            return { platform:"youtube", surface:"allowed", reason:"playlist", ...extras };
+      if (path.startsWith("/upload"))              return { platform:"youtube", surface:"allowed", reason:"upload", ...extras };
+      if (path.startsWith("/create"))              return { platform:"youtube", surface:"allowed", reason:"create", ...extras };
 
-      // Block
-      if (path === "/" || path === "")             return { platform:"youtube", surface:"blocked", reason:"home feed", ...ref };
-      if (path.startsWith("/feed/subscriptions"))  return { platform:"youtube", surface:"blocked", reason:"subscriptions", ...ref };
-      if (path.startsWith("/feed/trending"))       return { platform:"youtube", surface:"blocked", reason:"trending", ...ref };
-      if (path.startsWith("/feed/explore"))        return { platform:"youtube", surface:"blocked", reason:"explore", ...ref };
-      if (path.startsWith("/shorts"))              return { platform:"youtube", surface:"blocked", reason:"shorts", ...ref };
-      if (path.startsWith("/results"))             return { platform:"youtube", surface:"blocked", reason:"search results", ...ref };
-      if (path.startsWith("/gaming"))              return { platform:"youtube", surface:"blocked", reason:"gaming", ...ref };
-      if (path.startsWith("/trending"))            return { platform:"youtube", surface:"blocked", reason:"trending", ...ref };
+      if (path === "/" || path === "")             return { platform:"youtube", surface:"blocked", reason:"home feed", ...extras };
+      if (path.startsWith("/feed/subscriptions"))  return { platform:"youtube", surface:"blocked", reason:"subscriptions", ...extras };
+      if (path.startsWith("/feed/trending"))       return { platform:"youtube", surface:"blocked", reason:"trending", ...extras };
+      if (path.startsWith("/feed/explore"))        return { platform:"youtube", surface:"blocked", reason:"explore", ...extras };
+      if (path.startsWith("/shorts"))              return { platform:"youtube", surface:"blocked", reason:"shorts", ...extras };
+      if (path.startsWith("/results"))             return { platform:"youtube", surface:"blocked", reason:"search results", ...extras };
+      if (path.startsWith("/gaming"))              return { platform:"youtube", surface:"blocked", reason:"gaming", ...extras };
+      if (path.startsWith("/trending"))            return { platform:"youtube", surface:"blocked", reason:"trending", ...extras };
 
-      return { platform:"youtube", surface:"neutral", reason:"other youtube page", ...ref };
+      return { platform:"youtube", surface:"neutral", reason:"other youtube page", ...extras };
     }
 
     // ── Instagram ──────────────────────────────────────────────
     if (host === "instagram.com") {
-      const ref = { allowedReferenceUrl: "https://www.instagram.com/direct/inbox/", allowedReferenceLabel: "Direct Messages" };
+      const extras = {
+        allowedReferenceUrl:   "https://www.instagram.com/direct/inbox/",
+        allowedReferenceLabel: "Direct Messages",
+        creationUrl:           "https://www.instagram.com/",
+        creationLabel:         "Open Instagram to Post",
+      };
 
-      // Always allow
-      if (path.startsWith("/direct/inbox"))        return { platform:"instagram", surface:"allowed", reason:"direct messages", ...ref };
-      if (path.startsWith("/accounts"))            return { platform:"instagram", surface:"allowed", reason:"account settings", ...ref };
-      if (/^\/p\//.test(path))                     return { platform:"instagram", surface:"allowed", reason:"individual post", ...ref };
+      if (path.startsWith("/direct/inbox"))        return { platform:"instagram", surface:"allowed", reason:"direct messages", ...extras };
+      if (path.startsWith("/accounts"))            return { platform:"instagram", surface:"allowed", reason:"account settings", ...extras };
+      if (/^\/p\//.test(path))                     return { platform:"instagram", surface:"allowed", reason:"individual post", ...extras };
 
-      // Block
-      if (path === "/" || path === "")             return { platform:"instagram", surface:"blocked", reason:"home feed", ...ref };
-      if (path.startsWith("/explore"))             return { platform:"instagram", surface:"blocked", reason:"explore", ...ref };
-      if (path.startsWith("/reels"))               return { platform:"instagram", surface:"blocked", reason:"reels", ...ref };
-      if (path.startsWith("/stories"))             return { platform:"instagram", surface:"blocked", reason:"stories", ...ref };
+      // Instagram root — blocked by default, allowed under a valid creationIntent
+      if (path === "/" || path === "") {
+        if (hasValidCreationIntent("instagram")) {
+          log("Creation intent valid; allowing Instagram root");
+          return { platform:"instagram", surface:"allowed", reason:"creation intent bypass", ...extras };
+        }
+        return { platform:"instagram", surface:"blocked", reason:"home feed", ...extras };
+      }
 
-      // Profile pages — neutral (allow)
-      return { platform:"instagram", surface:"neutral", reason:"profile or other", ...ref };
+      if (path.startsWith("/explore"))             return { platform:"instagram", surface:"blocked", reason:"explore", ...extras };
+      if (path.startsWith("/reels"))               return { platform:"instagram", surface:"blocked", reason:"reels", ...extras };
+      if (path.startsWith("/stories"))             return { platform:"instagram", surface:"blocked", reason:"stories", ...extras };
+
+      return { platform:"instagram", surface:"neutral", reason:"profile or other", ...extras };
     }
 
     return { platform: "other", surface: "neutral", reason: "untracked platform" };
+  }
+
+  // ── Creation intent (Instagram bypass) ───────────────────────
+  // Allows instagram.com/ for up to 60 s after the user explicitly
+  // clicks "Open Instagram to Post" on the block screen.
+
+  const CREATION_INTENT_TTL = 60_000; // ms
+
+  function hasValidCreationIntent(platform) {
+    try {
+      const raw = sessionStorage.getItem("fs_creation_intent");
+      if (!raw) return false;
+      const intent = JSON.parse(raw);
+      if (intent.platform !== platform) return false;
+      if (Date.now() > intent.expiresAt) {
+        log("Creation intent expired; blocking Instagram root");
+        sessionStorage.removeItem("fs_creation_intent");
+        return false;
+      }
+      return true;
+    } catch { return false; }
+  }
+
+  function setCreationIntent(platform) {
+    const intent = { platform, expiresAt: Date.now() + CREATION_INTENT_TTL };
+    try { sessionStorage.setItem("fs_creation_intent", JSON.stringify(intent)); } catch {}
+    // Also write to chrome.storage so background can read it if needed
+    try { chrome.storage.local.set({ creationIntent: intent }); } catch {}
+    log("Creation intent set:", intent);
+  }
+
+  function clearCreationIntent() {
+    try { sessionStorage.removeItem("fs_creation_intent"); } catch {}
+    try { chrome.storage.local.remove("creationIntent"); } catch {}
   }
 
   // ── State helpers ─────────────────────────────────────────────
@@ -174,6 +223,10 @@
     const expired = remaining <= 0;
     const platformLabel = PLATFORM_LABELS[cl.platform] || "This site";
     const refLabel = cl.allowedReferenceLabel || "Reference";
+    const createLabel = cl.creationLabel || "Compose / Upload";
+
+    // Shared button base styles
+    const btnBase = "display:block;width:100%;border-radius:9999px;border:none;cursor:pointer;font-family:inherit;";
 
     return `
 <div id="fs-overlay-card" style="
@@ -198,20 +251,16 @@
   </p>
   <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:20px">
     ${!expired ? `
-    <button id="fs-btn-start" style="
-      display:block;width:100%;padding:13px 20px;
-      border-radius:9999px;border:none;
-      background:#4ade80;color:#000;
-      font-size:14px;font-weight:700;cursor:pointer;
-      font-family:inherit;
-    ">▶ Start free-scrolling session</button>` : ""}
-    <button id="fs-btn-reference" style="
-      display:block;width:100%;padding:11px 20px;
-      border-radius:9999px;border:none;
-      background:rgba(255,255,255,.07);color:#aab4be;
-      font-size:13px;font-weight:600;cursor:pointer;
-      font-family:inherit;
-    ">Go to ${refLabel}</button>
+    <button id="fs-btn-start" style="${btnBase}padding:13px 20px;background:#4ade80;color:#000;font-size:14px;font-weight:700;">
+      ▶ Start free-scrolling session
+    </button>` : ""}
+    ${cl.creationUrl ? `
+    <button id="fs-btn-create" style="${btnBase}padding:11px 20px;background:rgba(99,102,241,.18);color:#a5b4fc;font-size:13px;font-weight:600;">
+      ✏️ ${createLabel}
+    </button>` : ""}
+    <button id="fs-btn-reference" style="${btnBase}padding:11px 20px;background:rgba(255,255,255,.07);color:#aab4be;font-size:13px;font-weight:600;">
+      Go to ${refLabel}
+    </button>
   </div>
   <p style="font-size:11px;color:#3d444b;line-height:1.5;margin:0">
     Creation and reference surfaces are still available.
@@ -266,6 +315,23 @@
             log("START_SESSION failed:", res);
           }
         });
+      };
+    }
+
+    // Wire creation button
+    const createBtn = document.getElementById("fs-btn-create");
+    if (createBtn) {
+      createBtn.onmouseover = () => { createBtn.style.background = "rgba(99,102,241,.3)"; };
+      createBtn.onmouseout  = () => { createBtn.style.background = "rgba(99,102,241,.18)"; };
+      createBtn.onclick = () => {
+        log("Creation action clicked:", cl.creationUrl);
+        if (cl.platform === "instagram") {
+          // Instagram root is normally blocked — set a temporary bypass
+          setCreationIntent("instagram");
+        }
+        if (cl.creationUrl) {
+          location.href = cl.creationUrl;
+        }
       };
     }
 

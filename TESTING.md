@@ -84,6 +84,37 @@ Social sites navigate without page reloads. The block screen must appear on rout
 
 ---
 
+## Expected behavior: Compose / Upload Content (no session consumed)
+
+The block screen shows three buttons. The middle button navigates to the platform's
+creation surface **without** starting a session or decrementing remaining time.
+
+### X
+
+1. Go to `https://x.com/home` (shield on, no session) → block screen
+2. Click **Compose Post**
+3. Expected: navigates to `x.com/compose/post` — no session started, timer unchanged
+
+### YouTube
+
+1. Go to `https://www.youtube.com/` → block screen
+2. Click **Upload Video**
+3. Expected: navigates to `youtube.com/upload` — no session started, timer unchanged
+
+### Instagram (creation intent bypass)
+
+1. Go to `https://www.instagram.com/` → block screen
+2. Click **Open Instagram to Post**
+3. Expected:
+   - `creationIntent` is written to sessionStorage with 60-second expiry
+   - Navigates to `instagram.com/`
+   - Page loads (no block screen — intent is valid)
+   - Timer is NOT decremented, no session started
+4. Refresh the page after 60 seconds
+5. Expected: block screen reappears (intent expired)
+
+---
+
 ## Expected behavior: Start free-scrolling session
 
 1. Block screen is shown on `x.com/home`

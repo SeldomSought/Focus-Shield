@@ -50,8 +50,9 @@ function calcRemaining(state) {
 }
 
 // ── URL Classifier ─────────────────────────────────────────────
-// Returns { platform, surface: "blocked"|"allowed"|"neutral", reason }
-// No redirectUrl — blocking UX is handled by the content script overlay.
+// Returns { platform, surface, reason, allowedReferenceUrl,
+//           allowedReferenceLabel, creationUrl, creationLabel }
+// Blocking UX (overlay) is handled entirely by the content script.
 
 function classifyUrl(urlStr) {
   let url;
@@ -64,48 +65,64 @@ function classifyUrl(urlStr) {
 
   // ── X / Twitter ──
   if (host === "x.com" || host === "twitter.com") {
-    if (path.startsWith("/i/bookmarks"))       return { platform:"x", surface:"allowed", reason:"bookmarks" };
-    if (path.startsWith("/compose"))            return { platform:"x", surface:"allowed", reason:"compose" };
-    if (path.startsWith("/intent/tweet"))       return { platform:"x", surface:"allowed", reason:"intent" };
-    if (path.startsWith("/messages"))           return { platform:"x", surface:"allowed", reason:"messages" };
-    if (/^\/[^/]+\/status\/\d+/.test(path))    return { platform:"x", surface:"allowed", reason:"status page" };
-    if (path === "/" || path === "")            return { platform:"x", surface:"blocked", reason:"root feed" };
-    if (path.startsWith("/home"))               return { platform:"x", surface:"blocked", reason:"home feed" };
-    if (path.startsWith("/explore"))            return { platform:"x", surface:"blocked", reason:"explore" };
-    if (path.startsWith("/notifications"))      return { platform:"x", surface:"blocked", reason:"notifications" };
-    if (path.startsWith("/search"))             return { platform:"x", surface:"blocked", reason:"search" };
-    return { platform:"x", surface:"neutral", reason:"profile or other" };
+    const composeHost = host === "twitter.com" ? "twitter.com" : "x.com";
+    const extras = {
+      allowedReferenceUrl: "https://x.com/i/bookmarks", allowedReferenceLabel: "Bookmarks",
+      creationUrl: `https://${composeHost}/compose/post`, creationLabel: "Compose Post",
+    };
+    if (path.startsWith("/i/bookmarks"))       return { platform:"x", surface:"allowed", reason:"bookmarks", ...extras };
+    if (path.startsWith("/compose"))            return { platform:"x", surface:"allowed", reason:"compose", ...extras };
+    if (path.startsWith("/intent/tweet"))       return { platform:"x", surface:"allowed", reason:"intent", ...extras };
+    if (path.startsWith("/messages"))           return { platform:"x", surface:"allowed", reason:"messages", ...extras };
+    if (/^\/[^/]+\/status\/\d+/.test(path))    return { platform:"x", surface:"allowed", reason:"status page", ...extras };
+    if (path === "/" || path === "")            return { platform:"x", surface:"blocked", reason:"root feed", ...extras };
+    if (path.startsWith("/home"))               return { platform:"x", surface:"blocked", reason:"home feed", ...extras };
+    if (path.startsWith("/explore"))            return { platform:"x", surface:"blocked", reason:"explore", ...extras };
+    if (path.startsWith("/notifications"))      return { platform:"x", surface:"blocked", reason:"notifications", ...extras };
+    if (path.startsWith("/search"))             return { platform:"x", surface:"blocked", reason:"search", ...extras };
+    return { platform:"x", surface:"neutral", reason:"profile or other", ...extras };
   }
 
   // ── YouTube ──
-  if (host === "studio.youtube.com")           return { platform:"youtube", surface:"allowed", reason:"studio" };
+  if (host === "studio.youtube.com")           return { platform:"youtube", surface:"allowed", reason:"studio",
+    allowedReferenceUrl:"https://www.youtube.com/feed/history", allowedReferenceLabel:"History",
+    creationUrl:"https://www.youtube.com/upload", creationLabel:"Upload Video" };
   if (host === "youtube.com") {
-    if (path.startsWith("/watch"))              return { platform:"youtube", surface:"allowed", reason:"watch" };
-    if (path.startsWith("/feed/history"))       return { platform:"youtube", surface:"allowed", reason:"history" };
-    if (path.startsWith("/playlist"))           return { platform:"youtube", surface:"allowed", reason:"playlist" };
-    if (path.startsWith("/upload"))             return { platform:"youtube", surface:"allowed", reason:"upload" };
-    if (path.startsWith("/create"))             return { platform:"youtube", surface:"allowed", reason:"create" };
-    if (path === "/" || path === "")            return { platform:"youtube", surface:"blocked", reason:"home feed" };
-    if (path.startsWith("/feed/subscriptions")) return { platform:"youtube", surface:"blocked", reason:"subscriptions" };
-    if (path.startsWith("/feed/trending"))      return { platform:"youtube", surface:"blocked", reason:"trending" };
-    if (path.startsWith("/feed/explore"))       return { platform:"youtube", surface:"blocked", reason:"explore" };
-    if (path.startsWith("/shorts"))             return { platform:"youtube", surface:"blocked", reason:"shorts" };
-    if (path.startsWith("/results"))            return { platform:"youtube", surface:"blocked", reason:"search results" };
-    if (path.startsWith("/gaming"))             return { platform:"youtube", surface:"blocked", reason:"gaming" };
-    if (path.startsWith("/trending"))           return { platform:"youtube", surface:"blocked", reason:"trending" };
-    return { platform:"youtube", surface:"neutral", reason:"other youtube page" };
+    const extras = {
+      allowedReferenceUrl: "https://www.youtube.com/feed/history", allowedReferenceLabel: "History",
+      creationUrl: "https://www.youtube.com/upload", creationLabel: "Upload Video",
+    };
+    if (path.startsWith("/watch"))              return { platform:"youtube", surface:"allowed", reason:"watch", ...extras };
+    if (path.startsWith("/feed/history"))       return { platform:"youtube", surface:"allowed", reason:"history", ...extras };
+    if (path.startsWith("/playlist"))           return { platform:"youtube", surface:"allowed", reason:"playlist", ...extras };
+    if (path.startsWith("/upload"))             return { platform:"youtube", surface:"allowed", reason:"upload", ...extras };
+    if (path.startsWith("/create"))             return { platform:"youtube", surface:"allowed", reason:"create", ...extras };
+    if (path === "/" || path === "")            return { platform:"youtube", surface:"blocked", reason:"home feed", ...extras };
+    if (path.startsWith("/feed/subscriptions")) return { platform:"youtube", surface:"blocked", reason:"subscriptions", ...extras };
+    if (path.startsWith("/feed/trending"))      return { platform:"youtube", surface:"blocked", reason:"trending", ...extras };
+    if (path.startsWith("/feed/explore"))       return { platform:"youtube", surface:"blocked", reason:"explore", ...extras };
+    if (path.startsWith("/shorts"))             return { platform:"youtube", surface:"blocked", reason:"shorts", ...extras };
+    if (path.startsWith("/results"))            return { platform:"youtube", surface:"blocked", reason:"search results", ...extras };
+    if (path.startsWith("/gaming"))             return { platform:"youtube", surface:"blocked", reason:"gaming", ...extras };
+    if (path.startsWith("/trending"))           return { platform:"youtube", surface:"blocked", reason:"trending", ...extras };
+    return { platform:"youtube", surface:"neutral", reason:"other youtube page", ...extras };
   }
 
   // ── Instagram ──
   if (host === "instagram.com") {
-    if (path.startsWith("/direct/inbox"))       return { platform:"instagram", surface:"allowed", reason:"direct messages" };
-    if (path.startsWith("/accounts"))           return { platform:"instagram", surface:"allowed", reason:"account settings" };
-    if (/^\/p\//.test(path))                    return { platform:"instagram", surface:"allowed", reason:"individual post" };
-    if (path === "/" || path === "")            return { platform:"instagram", surface:"blocked", reason:"home feed" };
-    if (path.startsWith("/explore"))            return { platform:"instagram", surface:"blocked", reason:"explore" };
-    if (path.startsWith("/reels"))              return { platform:"instagram", surface:"blocked", reason:"reels" };
-    if (path.startsWith("/stories"))            return { platform:"instagram", surface:"blocked", reason:"stories" };
-    return { platform:"instagram", surface:"neutral", reason:"profile or other" };
+    const extras = {
+      allowedReferenceUrl: "https://www.instagram.com/direct/inbox/", allowedReferenceLabel: "Direct Messages",
+      creationUrl: "https://www.instagram.com/", creationLabel: "Open Instagram to Post",
+    };
+    if (path.startsWith("/direct/inbox"))       return { platform:"instagram", surface:"allowed", reason:"direct messages", ...extras };
+    if (path.startsWith("/accounts"))           return { platform:"instagram", surface:"allowed", reason:"account settings", ...extras };
+    if (/^\/p\//.test(path))                    return { platform:"instagram", surface:"allowed", reason:"individual post", ...extras };
+    // Root: blocked by default; content script applies creationIntent bypass
+    if (path === "/" || path === "")            return { platform:"instagram", surface:"blocked", reason:"home feed", ...extras };
+    if (path.startsWith("/explore"))            return { platform:"instagram", surface:"blocked", reason:"explore", ...extras };
+    if (path.startsWith("/reels"))              return { platform:"instagram", surface:"blocked", reason:"reels", ...extras };
+    if (path.startsWith("/stories"))            return { platform:"instagram", surface:"blocked", reason:"stories", ...extras };
+    return { platform:"instagram", surface:"neutral", reason:"profile or other", ...extras };
   }
 
   return { platform:"other", surface:"neutral", reason:"untracked platform" };
