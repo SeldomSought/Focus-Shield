@@ -1,0 +1,48 @@
+/* Focus Shield — Reddit
+   ALL rules gated behind body.fs-locked. */
+
+/* Hide sidebar recommendations */
+body.fs-locked [data-testid="sidebar-recommended"],
+body.fs-locked [data-testid="trending-widget"],
+body.fs-locked [data-testid="frontpage-best-carousel"],
+body.fs-locked [data-testid="popular-communities"],
+body.fs-locked [data-testid="recommended-community"],
+body.fs-locked [data-testid="create-community-card"],
+body.fs-locked [data-testid="premium-upsell-banner"] {
+  display: none !important;
+}
+
+/* Hide feed posts on main pages */
+body.fs-locked [data-testid="posts-list"],
+body.fs-locked shreddit-post,
+body.fs-locked .listing-page .sitetable,
+body.fs-locked .listing-page .nav-buttons {
+  display: none !important;
+}
+
+/* Hide feed filter tabs */
+body.fs-locked [role="tablist"] {
+  display: none !important;
+}
+
+/* Hide nav items to blocked destinations */
+body.fs-locked shreddit-sidebar-nav-item a[href="/"],
+body.fs-locked shreddit-sidebar-nav-item a[href="/home"],
+body.fs-locked shreddit-sidebar-nav-item a[href*="/popular"],
+body.fs-locked shreddit-sidebar-nav-item a[href*="/r/all"],
+body.fs-locked shreddit-sidebar-nav-item a[href*="/notifications"],
+body.fs-locked shreddit-sidebar-nav-item a[href*="/chat"] {
+  display: none !important;
+}
+
+/* Notification badges */
+body.fs-locked #email-collection-toaster,
+body.fs-locked [data-testid="notification-badge"] {
+  display: none !important;
+}
+
+/* Premium sidebar */
+body.fs-locked .premium-banner-outer,
+body.fs-locked .premium-banner {
+  display: none !important;
+}
