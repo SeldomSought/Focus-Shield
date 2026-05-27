@@ -112,12 +112,12 @@ function classifyUrl(urlStr) {
   if (host === "instagram.com") {
     const extras = {
       allowedReferenceUrl: "https://www.instagram.com/direct/inbox/", allowedReferenceLabel: "Direct Messages",
-      creationUrl: "https://www.instagram.com/", creationLabel: "Open Instagram to Post",
+      creationUrl: "https://www.instagram.com/create/select/", creationLabel: "Create Post",
     };
     if (path.startsWith("/direct/inbox"))       return { platform:"instagram", surface:"allowed", reason:"direct messages", ...extras };
     if (path.startsWith("/accounts"))           return { platform:"instagram", surface:"allowed", reason:"account settings", ...extras };
     if (/^\/p\//.test(path))                    return { platform:"instagram", surface:"allowed", reason:"individual post", ...extras };
-    // Root: blocked by default; content script applies creationIntent bypass
+    if (path.startsWith("/create"))             return { platform:"instagram", surface:"allowed", reason:"Instagram create route", ...extras };
     if (path === "/" || path === "")            return { platform:"instagram", surface:"blocked", reason:"home feed", ...extras };
     if (path.startsWith("/explore"))            return { platform:"instagram", surface:"blocked", reason:"explore", ...extras };
     if (path.startsWith("/reels"))              return { platform:"instagram", surface:"blocked", reason:"reels", ...extras };
