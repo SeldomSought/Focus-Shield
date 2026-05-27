@@ -110,23 +110,16 @@
       const extras = {
         allowedReferenceUrl:   "https://www.instagram.com/direct/inbox/",
         allowedReferenceLabel: "Direct Messages",
-        creationUrl:           "https://www.instagram.com/",
-        creationLabel:         "Open Instagram to Post",
+        creationUrl:           "https://www.instagram.com/create/select/",
+        creationLabel:         "Create Post",
       };
 
       if (path.startsWith("/direct/inbox"))        return { platform:"instagram", surface:"allowed", reason:"direct messages", ...extras };
       if (path.startsWith("/accounts"))            return { platform:"instagram", surface:"allowed", reason:"account settings", ...extras };
       if (/^\/p\//.test(path))                     return { platform:"instagram", surface:"allowed", reason:"individual post", ...extras };
+      if (path.startsWith("/create"))              { log("Instagram create route allowed"); return { platform:"instagram", surface:"allowed", reason:"Instagram create route", ...extras }; }
 
-      // Root: blocked by default; allowed under a valid creationIntent (see below)
-      if (path === "/" || path === "") {
-        if (hasValidCreationIntent("instagram")) {
-          log("Creation intent valid; allowing Instagram root");
-          return { platform:"instagram", surface:"allowed", reason:"creation intent bypass", ...extras };
-        }
-        return { platform:"instagram", surface:"blocked", reason:"home feed", ...extras };
-      }
-
+      if (path === "/" || path === "")             return { platform:"instagram", surface:"blocked", reason:"home feed", ...extras };
       if (path.startsWith("/explore"))             return { platform:"instagram", surface:"blocked", reason:"explore", ...extras };
       if (path.startsWith("/reels"))               return { platform:"instagram", surface:"blocked", reason:"reels", ...extras };
       if (path.startsWith("/stories"))             return { platform:"instagram", surface:"blocked", reason:"stories", ...extras };
@@ -135,34 +128,6 @@
     }
 
     return { platform: "other", surface: "neutral", reason: "untracked platform" };
-  }
-
-  // ── Creation intent (Instagram bypass) ───────────────────────
-  // Allows instagram.com/ for up to 60 s after the user explicitly
-  // clicks "Open Instagram to Post" on the block screen.
-
-  const CREATION_INTENT_TTL = 60_000;
-
-  function hasValidCreationIntent(platform) {
-    try {
-      const raw = sessionStorage.getItem("fs_creation_intent");
-      if (!raw) return false;
-      const intent = JSON.parse(raw);
-      if (intent.platform !== platform) return false;
-      if (Date.now() > intent.expiresAt) {
-        log("Creation intent expired; blocking Instagram root");
-        sessionStorage.removeItem("fs_creation_intent");
-        return false;
-      }
-      return true;
-    } catch { return false; }
-  }
-
-  function setCreationIntent(platform) {
-    const intent = { platform, expiresAt: Date.now() + CREATION_INTENT_TTL };
-    try { sessionStorage.setItem("fs_creation_intent", JSON.stringify(intent)); } catch {}
-    try { chrome.storage.local.set({ creationIntent: intent }); } catch {}
-    log("Creation intent set:", intent);
   }
 
   // ── State helpers ─────────────────────────────────────────────
@@ -317,9 +282,6 @@
       createBtn.onmouseout  = () => { createBtn.style.background = "rgba(99,102,241,.18)"; };
       createBtn.onclick = () => {
         log("Creation action clicked:", cl.creationUrl);
-        if (cl.platform === "instagram") {
-          setCreationIntent("instagram");
-        }
         if (cl.creationUrl) location.href = cl.creationUrl;
       };
     }

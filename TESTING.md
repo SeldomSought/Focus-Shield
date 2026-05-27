@@ -48,7 +48,8 @@ The block screen shows:
 | `https://www.youtube.com/results?search_query=cats` | Block screen |
 | `https://www.youtube.com/watch?v=dQw4w9WgXcQ` | ✅ Allowed |
 | `https://www.youtube.com/feed/history` | ✅ Allowed |
-| `https://www.youtube.com/playlist?list=WL` | ✅ Allowed |
+| `https://www.youtube.com/playlist?list=WL` | ✅ Allowed (Watch Later) |
+| `https://www.youtube.com/playlist?list=PLabc` | ✅ Allowed (any playlist) |
 | `https://studio.youtube.com` | ✅ Allowed (no content script, open) |
 
 ### Instagram
@@ -101,17 +102,34 @@ surface without starting a session or decrementing remaining time.
 2. Click **✏️ Upload Video**
 3. Expected: navigates to `youtube.com/upload` — no session started, timer unchanged
 
-### Instagram (creation intent bypass)
+### Instagram (direct create route)
 
 1. Go to `https://www.instagram.com/` → block screen appears
-2. Click **✏️ Open Instagram to Post**
+2. Click **✏️ Create Post**
 3. Expected:
-   - `fs_creation_intent` written to sessionStorage with 60 s expiry
-   - Navigates to `instagram.com/`
-   - **No block screen** — intent is valid, surface classified as allowed
+   - Navigates to `instagram.com/create/select/`
+   - **No block screen** — `/create` paths are classified as allowed
    - Timer NOT decremented, no session started
-4. Refresh the page after 60 seconds
-5. Expected: block screen reappears (intent expired)
+
+4. While on `instagram.com/create/select/`, click the browser back button (goes to root `/`)
+5. Expected: block screen appears immediately — no bypass on root
+
+6. Verify there is **no** `fs_creation_intent` key written to sessionStorage at any point (the 60-second bypass has been removed entirely)
+
+### Instagram (compose leak regression)
+
+1. Go to `https://www.instagram.com/` → block screen appears
+2. Click **✏️ Create Post** → navigates to `/create/select/`
+3. Close/cancel the create flow manually (e.g., click ✕ or navigate to a link that goes back to `/`)
+4. Expected: block screen reappears immediately — the home feed is not accessible
+
+| URL | Expected |
+|-----|----------|
+| `https://www.instagram.com/create/` | ✅ Allowed |
+| `https://www.instagram.com/create/select/` | ✅ Allowed |
+| `https://www.instagram.com/create/style/` | ✅ Allowed |
+| `https://www.instagram.com/create/details/` | ✅ Allowed |
+| `https://www.instagram.com/` after create flow | Block screen |
 
 ---
 
