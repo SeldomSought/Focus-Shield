@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Focus Shield",
   "description": "Social media feed blocker. 30-min daily budget across X and YouTube.",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "permissions": ["storage", "tabs", "scripting", "alarms"],
   "host_permissions": [
     "https://x.com/*",
@@ -11,7 +11,9 @@
     "https://mobile.twitter.com/*",
     "https://www.youtube.com/*",
     "https://youtube.com/*",
-    "https://studio.youtube.com/*"
+    "https://studio.youtube.com/*",
+    "https://www.instagram.com/*",
+    "https://instagram.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -24,7 +26,9 @@
         "https://mobile.x.com/*",
         "https://mobile.twitter.com/*",
         "https://www.youtube.com/*",
-        "https://youtube.com/*"
+        "https://youtube.com/*",
+        "https://www.instagram.com/*",
+        "https://instagram.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_start"

@@ -50,6 +50,8 @@ function calcRemaining(state) {
 }
 
 // ── URL Classifier ─────────────────────────────────────────────
+// Returns { platform, surface: "blocked"|"allowed"|"neutral", reason }
+// No redirectUrl — blocking UX is handled by the content script overlay.
 
 function classifyUrl(urlStr) {
   let url;
@@ -62,111 +64,65 @@ function classifyUrl(urlStr) {
 
   // ── X / Twitter ──
   if (host === "x.com" || host === "twitter.com") {
-    const redirect = "https://x.com/i/bookmarks";
-
-    // Always allow
     if (path.startsWith("/i/bookmarks"))       return { platform:"x", surface:"allowed", reason:"bookmarks" };
     if (path.startsWith("/compose"))            return { platform:"x", surface:"allowed", reason:"compose" };
     if (path.startsWith("/intent/tweet"))       return { platform:"x", surface:"allowed", reason:"intent" };
     if (path.startsWith("/messages"))           return { platform:"x", surface:"allowed", reason:"messages" };
     if (/^\/[^/]+\/status\/\d+/.test(path))    return { platform:"x", surface:"allowed", reason:"status page" };
-
-    // Block (feed / consumption)
-    if (path === "/" || path === "")            return { platform:"x", surface:"blocked", redirectUrl:redirect, reason:"root feed" };
-    if (path.startsWith("/home"))               return { platform:"x", surface:"blocked", redirectUrl:redirect, reason:"home feed" };
-    if (path.startsWith("/explore"))            return { platform:"x", surface:"blocked", redirectUrl:redirect, reason:"explore" };
-    if (path.startsWith("/notifications"))      return { platform:"x", surface:"blocked", redirectUrl:redirect, reason:"notifications" };
-    if (path.startsWith("/search"))             return { platform:"x", surface:"blocked", redirectUrl:redirect, reason:"search" };
-
-    // Neutral (profile pages, settings, etc.)
-    return { platform:"x", surface:"neutral", reason:"other x page" };
+    if (path === "/" || path === "")            return { platform:"x", surface:"blocked", reason:"root feed" };
+    if (path.startsWith("/home"))               return { platform:"x", surface:"blocked", reason:"home feed" };
+    if (path.startsWith("/explore"))            return { platform:"x", surface:"blocked", reason:"explore" };
+    if (path.startsWith("/notifications"))      return { platform:"x", surface:"blocked", reason:"notifications" };
+    if (path.startsWith("/search"))             return { platform:"x", surface:"blocked", reason:"search" };
+    return { platform:"x", surface:"neutral", reason:"profile or other" };
   }
 
   // ── YouTube ──
+  if (host === "studio.youtube.com")           return { platform:"youtube", surface:"allowed", reason:"studio" };
   if (host === "youtube.com") {
-    const redirect = "https://www.youtube.com/feed/history";
-
-    // Always allow
     if (path.startsWith("/watch"))              return { platform:"youtube", surface:"allowed", reason:"watch" };
     if (path.startsWith("/feed/history"))       return { platform:"youtube", surface:"allowed", reason:"history" };
     if (path.startsWith("/playlist"))           return { platform:"youtube", surface:"allowed", reason:"playlist" };
     if (path.startsWith("/upload"))             return { platform:"youtube", surface:"allowed", reason:"upload" };
     if (path.startsWith("/create"))             return { platform:"youtube", surface:"allowed", reason:"create" };
-
-    // Block
-    if (path === "/" || path === "")            return { platform:"youtube", surface:"blocked", redirectUrl:redirect, reason:"home feed" };
-    if (path.startsWith("/feed/subscriptions")) return { platform:"youtube", surface:"blocked", redirectUrl:redirect, reason:"subscriptions" };
-    if (path.startsWith("/feed/trending"))      return { platform:"youtube", surface:"blocked", redirectUrl:redirect, reason:"trending" };
-    if (path.startsWith("/feed/explore"))       return { platform:"youtube", surface:"blocked", redirectUrl:redirect, reason:"explore" };
-    if (path.startsWith("/shorts"))             return { platform:"youtube", surface:"blocked", redirectUrl:redirect, reason:"shorts" };
-    if (path.startsWith("/results"))            return { platform:"youtube", surface:"blocked", redirectUrl:redirect, reason:"search results" };
-
+    if (path === "/" || path === "")            return { platform:"youtube", surface:"blocked", reason:"home feed" };
+    if (path.startsWith("/feed/subscriptions")) return { platform:"youtube", surface:"blocked", reason:"subscriptions" };
+    if (path.startsWith("/feed/trending"))      return { platform:"youtube", surface:"blocked", reason:"trending" };
+    if (path.startsWith("/feed/explore"))       return { platform:"youtube", surface:"blocked", reason:"explore" };
+    if (path.startsWith("/shorts"))             return { platform:"youtube", surface:"blocked", reason:"shorts" };
+    if (path.startsWith("/results"))            return { platform:"youtube", surface:"blocked", reason:"search results" };
+    if (path.startsWith("/gaming"))             return { platform:"youtube", surface:"blocked", reason:"gaming" };
+    if (path.startsWith("/trending"))           return { platform:"youtube", surface:"blocked", reason:"trending" };
     return { platform:"youtube", surface:"neutral", reason:"other youtube page" };
   }
 
-  // YouTube Studio — always allowed
-  if (host === "studio.youtube.com") {
-    return { platform:"youtube", surface:"allowed", reason:"studio" };
+  // ── Instagram ──
+  if (host === "instagram.com") {
+    if (path.startsWith("/direct/inbox"))       return { platform:"instagram", surface:"allowed", reason:"direct messages" };
+    if (path.startsWith("/accounts"))           return { platform:"instagram", surface:"allowed", reason:"account settings" };
+    if (/^\/p\//.test(path))                    return { platform:"instagram", surface:"allowed", reason:"individual post" };
+    if (path === "/" || path === "")            return { platform:"instagram", surface:"blocked", reason:"home feed" };
+    if (path.startsWith("/explore"))            return { platform:"instagram", surface:"blocked", reason:"explore" };
+    if (path.startsWith("/reels"))              return { platform:"instagram", surface:"blocked", reason:"reels" };
+    if (path.startsWith("/stories"))            return { platform:"instagram", surface:"blocked", reason:"stories" };
+    return { platform:"instagram", surface:"neutral", reason:"profile or other" };
   }
 
   return { platform:"other", surface:"neutral", reason:"untracked platform" };
 }
 
-// ── Tab enforcement ────────────────────────────────────────────
+// ── Broadcast STATE_UPDATE to all content scripts ─────────────
+// The content script overlay handles all blocking UX.
+// Background does NOT redirect tabs — it only manages state
+// and tells content scripts when something changed.
 
-async function enforceTab(tabId, url) {
-  if (!url || !url.startsWith("http")) return;
-
-  const state = await getState();
-  if (!state.focusEnabled) { log("Shield off, skip"); return; }
-
-  const remaining = calcRemaining(state);
-  if (state.sessionActive && remaining > 0) { log("Session active, skip"); return; }
-
-  // If session just ran out, clean it up
-  if (state.sessionActive && remaining <= 0) {
-    log("Session expired during tab check — ending session");
-    await patchState({ sessionActive: false, sessionStartedAt: null, remainingSeconds: 0 });
-  }
-
-  const { surface, redirectUrl, reason } = classifyUrl(url);
-  log("Tab", tabId, url, "→", surface, `(${reason})`);
-
-  if (surface === "blocked" && redirectUrl && url !== redirectUrl) {
-    log("Redirecting tab", tabId, "→", redirectUrl);
-    try {
-      await chrome.tabs.update(tabId, { url: redirectUrl });
-    } catch (e) {
-      log("Redirect failed:", e.message);
-    }
-  }
-}
-
-async function enforceAllTabs() {
-  try {
-    const tabs = await chrome.tabs.query({});
+function notifyAllTabs() {
+  chrome.tabs.query({}, tabs => {
     for (const tab of tabs) {
-      if (tab.url) enforceTab(tab.id, tab.url);
+      try { chrome.tabs.sendMessage(tab.id, { type: "STATE_UPDATE" }); } catch {}
     }
-  } catch (e) {
-    log("enforceAllTabs error:", e);
-  }
+  });
 }
-
-// ── Tab listeners ──────────────────────────────────────────────
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Act on URL changes (catches navigations in progress)
-  const url = changeInfo.url;
-  if (url) enforceTab(tabId, url);
-});
-
-chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    if (tab.url) enforceTab(tabId, tab.url);
-  } catch {}
-});
 
 // ── Daily reset ────────────────────────────────────────────────
 
@@ -182,8 +138,7 @@ async function checkReset() {
     sessionStartedAt: null,
     lastResetDate: today,
   });
-  broadcastStateUpdate();
-  enforceAllTabs();
+  notifyAllTabs();
 }
 
 // ── Timer tick ─────────────────────────────────────────────────
@@ -198,21 +153,11 @@ async function tick() {
   if (remaining <= 0) {
     log("Session time expired");
     await patchState({ sessionActive: false, sessionStartedAt: null, remainingSeconds: 0 });
-    broadcastStateUpdate();
-    enforceAllTabs();
+    notifyAllTabs();
   }
   // No need to write anything else — calcRemaining derives the value live.
 }
 
-// ── Broadcast ─────────────────────────────────────────────────
-
-function broadcastStateUpdate() {
-  chrome.tabs.query({}, tabs => {
-    for (const tab of tabs) {
-      try { chrome.tabs.sendMessage(tab.id, { type: "STATE_UPDATE" }); } catch {}
-    }
-  });
-}
 
 // ── Alarms ────────────────────────────────────────────────────
 
@@ -281,7 +226,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         if (remaining <= 0) { respond({ success: false, reason: "no_time_left" }); break; }
         if (state.sessionActive) { respond({ success: true, alreadyActive: true }); break; }
         await patchState({ sessionActive: true, sessionStartedAt: Date.now() });
-        broadcastStateUpdate();
+        notifyAllTabs();
         respond({ success: true });
         break;
       }
@@ -290,8 +235,8 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         // Persist how much time was actually remaining before stopping
         const remaining = calcRemaining(state);
         await patchState({ sessionActive: false, sessionStartedAt: null, remainingSeconds: remaining });
-        broadcastStateUpdate();
-        enforceAllTabs();
+        notifyAllTabs();
+        notifyAllTabs();
         respond({ success: true });
         break;
       }
@@ -303,9 +248,9 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           // Stop any session when shield is disabled
           await patchState({ sessionActive: false, sessionStartedAt: null });
         } else {
-          enforceAllTabs();
+          notifyAllTabs();
         }
-        broadcastStateUpdate();
+        notifyAllTabs();
         respond({ success: true });
         break;
       }
@@ -319,7 +264,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           sessionStartedAt: null,
           lastResetDate: todayStr(),
         });
-        broadcastStateUpdate();
+        notifyAllTabs();
         respond({ success: true });
         break;
       }

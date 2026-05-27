@@ -1,86 +1,149 @@
-# Focus Shield — Manual Test Checklist
+# Focus Shield — Manual Test Checklist v3.1
 
-## How to load the extension
+## How to load / reload
 
-1. Open Chrome → `chrome://extensions`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `focus-shield` folder
-5. The Focus Shield icon should appear in the toolbar
+1. Chrome → `chrome://extensions` → enable **Developer mode**
+2. **Load unpacked** → select the `focus-shield` folder
+3. After any code change: click the **↺ refresh** icon on the extension card
 
-To reload after code changes: click the refresh icon on the extension card, or press `Ctrl+R` (Windows) / `Cmd+R` (Mac) on that card.
+Open the **service worker** inspector link on the extension card to see `[Focus Shield]` background logs.
+Open DevTools on any platform tab (Console) to see content script logs.
 
-## Test: Shield active, no session
+---
 
-Open the popup and confirm: Shield enabled toggle is ON, no session is active.
+## Expected behavior: Focus Shield ON, no active session
 
-| URL | Expected result |
-|-----|----------------|
-| `https://x.com/home` | Redirects to `https://x.com/i/bookmarks` |
-| `https://twitter.com/home` | Redirects to `https://x.com/i/bookmarks` |
-| `https://x.com/` | Redirects to `https://x.com/i/bookmarks` |
-| `https://x.com/explore` | Redirects to `https://x.com/i/bookmarks` |
-| `https://x.com/notifications` | Redirects to `https://x.com/i/bookmarks` |
-| `https://x.com/search?q=test` | Redirects to `https://x.com/i/bookmarks` |
-| `https://x.com/i/bookmarks` | **Stays — always allowed** |
-| `https://x.com/compose/post` | **Stays — always allowed** |
-| `https://x.com/messages` | **Stays — always allowed** |
-| `https://x.com/elonmusk/status/123456789` | **Stays — always allowed** |
-| `https://www.youtube.com/` | Redirects to `https://www.youtube.com/feed/history` |
-| `https://www.youtube.com/feed/subscriptions` | Redirects to history |
-| `https://www.youtube.com/shorts/abc123` | Redirects to history |
-| `https://www.youtube.com/results?search_query=cats` | Redirects to history |
-| `https://www.youtube.com/watch?v=dQw4w9WgXcQ` | **Stays — always allowed** |
-| `https://www.youtube.com/feed/history` | **Stays — always allowed** |
-| `https://www.youtube.com/playlist?list=WL` | **Stays — always allowed** |
-| `https://studio.youtube.com` | **Stays — always allowed** |
+A dark full-page **Focus Shield block screen** should appear — not a redirect.
+The block screen shows:
+- Platform name
+- "This feed is blocked while Focus Shield is active."
+- Remaining daily budget
+- **Start free-scrolling session** button
+- **Go to [reference]** button (navigates only when clicked)
+- "Creation and reference surfaces are still available."
 
-## Test: Session active
+### X / Twitter
 
-1. Open popup, click "Start Session"
-2. Popup shows "Free scrolling session active"
+| URL | Expected |
+|-----|----------|
+| `https://x.com/` | Block screen |
+| `https://x.com/home` | Block screen |
+| `https://x.com/explore` | Block screen |
+| `https://x.com/notifications` | Block screen |
+| `https://x.com/search?q=test` | Block screen |
+| `https://twitter.com/home` | Block screen |
+| `https://x.com/i/bookmarks` | ✅ Allowed — no block screen |
+| `https://x.com/compose/post` | ✅ Allowed |
+| `https://x.com/messages` | ✅ Allowed |
+| `https://x.com/elonmusk/status/123456789` | ✅ Allowed |
+| `https://x.com/elonmusk` (profile) | ✅ Allowed (neutral) |
 
-| URL | Expected result |
-|-----|----------------|
-| `https://x.com/home` | **Allowed — session active** |
-| `https://www.youtube.com/` | **Allowed — session active** |
-| `https://www.youtube.com/shorts/abc` | **Allowed — session active** |
+### YouTube
 
-3. Timer counts down in the popup
-4. When time runs out: feeds block again, session stops automatically
+| URL | Expected |
+|-----|----------|
+| `https://www.youtube.com/` | Block screen |
+| `https://www.youtube.com/feed/subscriptions` | Block screen |
+| `https://www.youtube.com/shorts/abc123` | Block screen |
+| `https://www.youtube.com/results?search_query=cats` | Block screen |
+| `https://www.youtube.com/watch?v=dQw4w9WgXcQ` | ✅ Allowed |
+| `https://www.youtube.com/feed/history` | ✅ Allowed |
+| `https://www.youtube.com/playlist?list=WL` | ✅ Allowed |
+| `https://studio.youtube.com` | ✅ Allowed (no content script, open) |
 
-## Test: Shield disabled
+### Instagram
 
-1. Open popup, toggle Focus Shield OFF
+| URL | Expected |
+|-----|----------|
+| `https://www.instagram.com/` | Block screen |
+| `https://www.instagram.com/explore` | Block screen |
+| `https://www.instagram.com/reels` | Block screen |
+| `https://www.instagram.com/reels/abc123` | Block screen |
+| `https://www.instagram.com/stories` | Block screen |
+| `https://www.instagram.com/direct/inbox/` | ✅ Allowed |
+| `https://www.instagram.com/p/abc123/` | ✅ Allowed |
+| `https://www.instagram.com/someuser/` (profile) | ✅ Allowed (neutral) |
 
-| URL | Expected result |
-|-----|----------------|
-| `https://x.com/home` | **Allowed — shield off** |
-| `https://www.youtube.com/` | **Allowed — shield off** |
+---
 
-## Test: SPA navigation (important)
+## Expected behavior: SPA navigation (critical)
 
-Twitter/X and YouTube navigate within the page without full reloads.
+Social sites navigate without page reloads. The block screen must appear on route changes.
 
-1. With shield ON and no session, go to `https://x.com/i/bookmarks` (allowed)
-2. Click the "Home" link in the Twitter sidebar
-3. Expected: **immediately redirects back to bookmarks**
+1. Go to `https://x.com/i/bookmarks` (allowed) — no block screen
+2. Click **Home** in the Twitter sidebar
+3. Expected: block screen appears immediately
 
 4. Go to `https://www.youtube.com/feed/history` (allowed)
 5. Click the YouTube logo (goes to home feed)
-6. Expected: **immediately redirects to history**
+6. Expected: block screen appears immediately
 
-## Test: Reset button
+7. Go to `https://www.instagram.com/direct/inbox/` (allowed)
+8. Click the home icon
+9. Expected: block screen appears immediately
 
-1. Open popup, click "Reset today's budget (testing)"
-2. Timer resets to 30:00
-3. Any active session is stopped
+---
+
+## Expected behavior: Start free-scrolling session
+
+1. Block screen is shown on `x.com/home`
+2. Click **Start free-scrolling session**
+3. Expected:
+   - Block screen disappears
+   - Page content (`x.com/home`) becomes visible
+   - A small timer pill appears (top-right) showing remaining time
+   - Timer counts down
+
+4. Click **Stop** in the timer pill
+5. Expected: block screen reappears
+
+6. Open popup — click **Start Session** — same result from the popup
+
+---
+
+## Expected behavior: Session timer expiry
+
+1. In popup, reset budget to 1 minute (or use Reset Today then manually set limit to 1m)
+2. Start a session
+3. Wait for timer to reach 0
+4. Expected:
+   - Session stops automatically
+   - Any open blocked-feed tabs show the block screen again
+   - Popup shows "Daily budget exhausted"
+   - Block screen shows "Daily budget exhausted — resets at midnight"
+
+---
+
+## Expected behavior: Shield disabled
+
+1. Open popup → toggle **Focus Shield enabled** OFF
+2. Visit `x.com/home`, `youtube.com/`, `instagram.com/`
+3. Expected: all pages load normally, no block screen
+
+---
+
+## Debug logs to verify
+
+Open DevTools Console on any platform tab. You should see:
+
+```
+[Focus Shield] Content script loaded on x.com /home
+[Focus Shield] Initial state: { focusEnabled: true, sessionActive: false, remainingSeconds: 1800 }
+[Focus Shield] Enforce | URL: https://x.com/home | surface: blocked (home feed) | focusEnabled: true | sessionActive: false | remaining: 1800s
+[Focus Shield] Block screen shown: x (home feed)
+```
+
+On a SPA navigation:
+```
+[Focus Shield] URL changed → https://x.com/home
+[Focus Shield] Enforce | URL: https://x.com/home | surface: blocked ...
+[Focus Shield] Block screen shown: x (home feed)
+```
+
+---
 
 ## Known limitations
 
-- Timer accuracy: the alarm-based countdown in the background may drift by up to 30s per tick.
-  The content script calculates remaining time from `sessionStartedAt` so it's accurate to ~1s.
-- Studio.youtube.com: the content script doesn't run on studio.youtube.com (no content_script match),
-  but that's fine since the background will allow it.
-- Profile pages on X (e.g., `x.com/elonmusk`) are treated as "neutral" (not blocked, not explicitly allowed).
-  They will pass through without redirect. This is intentional.
+- `studio.youtube.com` has no content script (not matched) — always accessible, which is correct.
+- Profile pages on X and Instagram are classified as "neutral" (allowed) — they don't have infinite feeds in the same way.
+- The overlay guard uses MutationObserver on `<html>` — if a site completely replaces `document.documentElement`, the guard may need to restart. This is an edge case.
