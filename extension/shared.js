@@ -1,16 +1,13 @@
 /*
- * Focus Shield — Shared Content Script (v5)
+ * Focus Shield — Shared Content Script
  *
- * ACTIVE SESSION: Timer pill. Zero interference. Page reload on unlock.
+ * LOCKING MODEL: setInterval(enforce, 750)
+ *   Every 750 ms, read _currentTimer and apply the correct state.
+ *   No URL watchers, no debouncing, no state-transition guards.
+ *   Simple enough to reason about; hard enough to silently break.
  *
- * LOCKED: Platform decides what happens via FocusShield.onLocked(pageType):
- *   - Default: overlay on feed, redirect on blocked, nothing on allowed
- *   - Instagram overrides: redirect-based (no overlay — so nav stays usable)
- *
- * OVERLAY STABILITY:
- *   - Overlay only rebuilds when URL changes or expired state toggles
- *   - Timer ticks update the pill only, never touch the overlay
- *   - All evaluation is debounced with 500ms settle time
+ * UNLOCK: only when sessionActive && !isPaused && time remaining > 0.
+ *         timer.enabled is intentionally ignored — blocking is always on.
  */
 
 (function () {
@@ -19,29 +16,21 @@
   if (window.__focusShieldLoaded) return;
   window.__focusShieldLoaded = true;
 
+  // Platform scripts override these
   window.FocusShield = {
     platform: null,
-    isAllowedPage: () => true,
+    isAllowedPage: () => false,
     isFeedPage: () => false,
     isBlockedPage: () => false,
     getAllowedLinks: () => [],
     getSavedUrl: () => "/",
-    // Platform can override this to customize lock behavior
-    // Return true to indicate it handled the lock (skip default overlay)
-    onLocked: null,
+    onLocked: null,   // Instagram sets this to override default behaviour
   };
 
-  let _lastFeedUnlocked = null;
-  let _urlWatcher = null;
   let _currentTimer = null;
-  let _overlayUrl = null;      // URL for which overlay is currently shown
-  let _overlayExpired = null;  // expired state when overlay was built
-  let _evalDebounce = null;
-  let _lastEvalUrl = null;
-  let _lockedClassObserver = null;
 
   // ═══════════════════════════════════════════════════════════════
-  // HELPERS
+  // BACKGROUND COMMUNICATION
   // ═══════════════════════════════════════════════════════════════
 
   function getState() {
@@ -52,31 +41,31 @@
         try {
           chrome.runtime.sendMessage({ type: "GET_STATE" }, r => {
             if (chrome.runtime.lastError || !r) {
-              // Service worker may be cold-starting — retry up to 3 times
-              if (attempts < 3) { setTimeout(attempt, 400); }
-              else { resolve(null); }
+              if (attempts < 3) { setTimeout(attempt, 400); } else { resolve(null); }
               return;
             }
             resolve(r);
           });
         } catch {
-          if (attempts < 3) { setTimeout(attempt, 400); }
-          else { resolve(null); }
+          if (attempts < 3) { setTimeout(attempt, 400); } else { resolve(null); }
         }
       }
       attempt();
     });
   }
 
-  function fmt(s) {
-    const m = Math.floor(s / 60);
-    return `${m}:${(s % 60).toString().padStart(2, "0")}`;
+  function send(type) {
+    try {
+      chrome.runtime.sendMessage({ type }, r => {
+        if (chrome.runtime.lastError) return;
+        if (r?.timer) _currentTimer = r.timer;
+      });
+    } catch {}
   }
 
-  function send(type) {
-    chrome.runtime.sendMessage({ type }, r => {
-      if (r?.success) updateUI(r.timer);
-    });
+  function fmt(s) {
+    const m = Math.floor(s / 60);
+    return `${m}:${String(s % 60).padStart(2, "0")}`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -94,96 +83,63 @@
         <div id="fs-timer-controls">
           <button id="fs-btn-start" class="fs-btn fs-btn-start" title="Start">▶</button>
           <button id="fs-btn-pause" class="fs-btn fs-btn-pause" title="Pause" style="display:none">❚❚</button>
-          <button id="fs-btn-stop" class="fs-btn fs-btn-stop" title="Stop" style="display:none">■</button>
+          <button id="fs-btn-stop"  class="fs-btn fs-btn-stop"  title="Stop"  style="display:none">■</button>
         </div>
       </div>`;
-    // Append to <html>, not <body> — keeps it outside React's managed subtree
     document.documentElement.appendChild(el);
-    document.getElementById("fs-btn-start").addEventListener("click", () => send("START_SESSION"));
-    document.getElementById("fs-btn-pause").addEventListener("click", () => send("PAUSE_SESSION"));
-    document.getElementById("fs-btn-stop").addEventListener("click", () => send("STOP_SESSION"));
+    document.getElementById("fs-btn-start").onclick = () => send("START_SESSION");
+    document.getElementById("fs-btn-pause").onclick = () => send("PAUSE_SESSION");
+    document.getElementById("fs-btn-stop").onclick  = () => send("STOP_SESSION");
     makeDraggable(el);
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // DRAGGABLE PILL
-  // ═══════════════════════════════════════════════════════════════
+  function updatePill(remaining, isExpired, isActive, isPaused) {
+    ensureTimerPill();
+    const d   = document.getElementById("fs-timer-display");
+    const dot = document.getElementById("fs-timer-dot");
+    const s   = document.getElementById("fs-btn-start");
+    const p   = document.getElementById("fs-btn-pause");
+    const t   = document.getElementById("fs-btn-stop");
 
-  function makeDraggable(el) {
-    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
-
-    // Restore saved position from previous session
-    try {
-      chrome.storage.local.get("fs_pill_pos", r => {
-        if (chrome.runtime.lastError || !r.fs_pill_pos) return;
-        el.style.right = "auto";
-        el.style.left = r.fs_pill_pos.left;
-        el.style.top = r.fs_pill_pos.top;
-      });
-    } catch {}
-
-    el.addEventListener("mousedown", e => {
-      // Ignore right-clicks and clicks on the control buttons
-      if (e.button !== 0 || e.target.closest("button")) return;
-      dragging = true;
-      const rect = el.getBoundingClientRect();
-      // Convert right-anchored default position to left-anchored for dragging
-      el.style.right = "auto";
-      el.style.left = rect.left + "px";
-      el.style.top = rect.top + "px";
-      origLeft = rect.left;
-      origTop = rect.top;
-      startX = e.clientX;
-      startY = e.clientY;
-      el.style.transition = "none";
-      el.style.cursor = "grabbing";
-      e.preventDefault();
-    });
-
-    document.addEventListener("mousemove", e => {
-      if (!dragging) return;
-      const x = Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, origLeft + (e.clientX - startX)));
-      const y = Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, origTop + (e.clientY - startY)));
-      el.style.left = x + "px";
-      el.style.top = y + "px";
-    });
-
-    document.addEventListener("mouseup", () => {
-      if (!dragging) return;
-      dragging = false;
-      el.style.transition = "";
-      el.style.cursor = "grab";
-      try {
-        chrome.storage.local.set({ fs_pill_pos: { left: el.style.left, top: el.style.top } });
-      } catch {}
-    });
+    if (d) d.textContent = fmt(remaining);
+    if (dot) dot.className = isExpired ? "fs-dot-expired"
+                           : isActive  ? "fs-dot-active"
+                           : isPaused  ? "fs-dot-paused"
+                           : "fs-dot-idle";
+    if (s && p && t) {
+      if (isExpired) {
+        s.style.display = "none"; p.style.display = "none"; t.style.display = "none";
+      } else if (isActive) {
+        s.style.display = "none"; p.style.display = "inline-flex"; t.style.display = "inline-flex";
+      } else if (isPaused) {
+        s.style.display = "inline-flex"; s.textContent = "▶"; s.onclick = () => send("RESUME_SESSION");
+        p.style.display = "none"; t.style.display = "inline-flex";
+      } else {
+        s.style.display = "inline-flex"; s.textContent = "▶"; s.onclick = () => send("START_SESSION");
+        p.style.display = "none"; t.style.display = "none";
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // LOCK OVERLAY — only rebuilt on URL change or expired toggle
+  // LOCK OVERLAY
   // ═══════════════════════════════════════════════════════════════
 
   function showOverlay(isExpired, remaining) {
-    const currentUrl = window.location.pathname;
-
-    // Skip rebuild if already showing for this URL + expired state
-    if (_overlayUrl === currentUrl && _overlayExpired === isExpired) {
-      // Just make sure it's visible
-      const ov = document.getElementById("fs-lock-overlay");
-      if (ov) ov.style.display = "flex";
-      return;
-    }
-
-    _overlayUrl = currentUrl;
-    _overlayExpired = isExpired;
-
     let ov = document.getElementById("fs-lock-overlay");
     if (!ov) {
       ov = document.createElement("div");
       ov.id = "fs-lock-overlay";
-      // Append to <html>, not <body> — keeps it outside React's managed subtree
       document.documentElement.appendChild(ov);
     }
+
+    // Skip full rebuild if already showing this state for this URL
+    if (ov.dataset.url === location.pathname &&
+        ov.dataset.exp === String(isExpired) &&
+        ov.style.display === "flex") return;
+
+    ov.dataset.url = location.pathname;
+    ov.dataset.exp = String(isExpired);
     ov.style.display = "flex";
 
     const links = (window.FocusShield.getAllowedLinks() || []);
@@ -209,69 +165,66 @@
       </div>`;
     }
 
-    // Attach handlers after DOM update
     requestAnimationFrame(() => {
-      const startBtn = document.getElementById("fs-lock-start-btn");
-      if (startBtn) startBtn.onclick = () => send("START_SESSION");
-
+      const sb = document.getElementById("fs-lock-start-btn");
+      if (sb) sb.onclick = () => send("START_SESSION");
       links.forEach((l, i) => {
         const btn = document.getElementById(`fs-nav-${i}`);
-        if (btn) btn.onclick = () => { window.location.href = l.url; };
+        if (btn) btn.onclick = () => { location.href = l.url; };
       });
     });
   }
 
   function hideOverlay() {
-    _overlayUrl = null;
-    _overlayExpired = null;
     const ov = document.getElementById("fs-lock-overlay");
-    if (ov) ov.style.display = "none";
+    if (ov) { ov.style.display = "none"; ov.dataset.url = ""; }
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // PAGE EVALUATION — only runs on URL change, heavily debounced
+  // FS-LOCKED CLASS  (drives platform CSS feed-suppression rules)
   // ═══════════════════════════════════════════════════════════════
 
-  function scheduleEval() {
-    if (_evalDebounce) clearTimeout(_evalDebounce);
-    _evalDebounce = setTimeout(doEval, 500);
+  function applyLockedClass() {
+    document.body?.classList.add("fs-locked");
+    document.documentElement.classList.add("fs-locked");
   }
 
-  function doEval() {
+  function removeLockedClass() {
+    document.body?.classList.remove("fs-locked");
+    document.documentElement.classList.remove("fs-locked");
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ENFORCE  — called every 750 ms
+  // ═══════════════════════════════════════════════════════════════
+
+  function enforce() {
     if (!_currentTimer) return;
-    const timer = _currentTimer;
-    const remaining = Math.max(0, timer.dailyLimitSeconds - timer.secondsUsed);
-    const isExpired = remaining <= 0;
-    const isActive = timer.sessionActive && !timer.isPaused && !isExpired;
-    const feedUnlocked = isActive;  // enabled flag is intentionally ignored
 
-    if (feedUnlocked) { hideOverlay(); return; }
+    const remaining = Math.max(0, _currentTimer.dailyLimitSeconds - _currentTimer.secondsUsed);
+    const isExpired  = remaining <= 0;
+    const isActive   = _currentTimer.sessionActive && !_currentTimer.isPaused && !isExpired;
+    const isPaused   = _currentTimer.sessionActive && _currentTimer.isPaused;
 
-    const currentUrl = window.location.pathname;
+    updatePill(remaining, isExpired, isActive, isPaused);
 
-    // Avoid re-evaluating the same URL (prevents repeated redirects)
-    if (_lastEvalUrl === currentUrl) {
-      // Still on same URL — just ensure overlay state is correct
-      if (window.FocusShield.isFeedPage() && !window.FocusShield.isAllowedPage()) {
-        showOverlay(isExpired, remaining);
-      }
-      return;
-    }
-    _lastEvalUrl = currentUrl;
-
-    // Let platform handle it first
-    if (window.FocusShield.onLocked) {
-      const handled = window.FocusShield.onLocked(isExpired, remaining);
-      if (handled) return;
-    }
-
-    // Default behavior
-    if (window.FocusShield.isBlockedPage()) {
+    // ── Unlocked (active session) ──────────────────────────────
+    if (isActive) {
+      removeLockedClass();
       hideOverlay();
-      window.location.replace(window.FocusShield.getSavedUrl());
       return;
     }
 
+    // ── Locked ────────────────────────────────────────────────
+    applyLockedClass();
+
+    // Instagram (and any future platform) provides its own onLocked handler
+    if (typeof window.FocusShield.onLocked === "function") {
+      window.FocusShield.onLocked(isExpired, remaining);
+      return;
+    }
+
+    // Default: allowed → pass; feed → overlay; everything else → redirect
     if (window.FocusShield.isAllowedPage()) {
       hideOverlay();
       return;
@@ -282,173 +235,23 @@
       return;
     }
 
-    // Unknown page — default-block by redirecting to saved
-    hideOverlay();
-    window.location.replace(window.FocusShield.getSavedUrl());
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // URL WATCHER
-  // ═══════════════════════════════════════════════════════════════
-
-  function startUrlWatcher() {
-    if (_urlWatcher) return;
-    let lastPath = window.location.pathname;
-    _urlWatcher = setInterval(() => {
-      const p = window.location.pathname;
-      if (p !== lastPath) {
-        lastPath = p;
-        _lastEvalUrl = null;  // allow re-evaluation for new URL
-        scheduleEval();
-      }
-    }, 400);
-  }
-
-  function stopUrlWatcher() {
-    if (_urlWatcher) { clearInterval(_urlWatcher); _urlWatcher = null; }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // LOCK HEARTBEAT — re-enforces blocking every 1.5s when locked.
-  // Needed because timer ticks don't broadcast when no session is
-  // active, so updateUI() is never called while locked. Without this,
-  // the overlay can be removed by React with no mechanism to re-add it.
-  // ═══════════════════════════════════════════════════════════════
-
-  let _lockHeartbeat = null;
-
-  function startLockHeartbeat() {
-    if (_lockHeartbeat) return;
-    _lockHeartbeat = setInterval(() => {
-      if (!_currentTimer) return;
-      const remaining = Math.max(0, _currentTimer.dailyLimitSeconds - _currentTimer.secondsUsed);
-      const isExpired = remaining <= 0;
-      const isActive = _currentTimer.sessionActive && !_currentTimer.isPaused && !isExpired;
-      if (isActive) { stopLockHeartbeat(); return; }
-
-      if (window.FocusShield.isFeedPage()) {
-        const ov = document.getElementById("fs-lock-overlay");
-        if (!ov || ov.style.display === "none") {
-          // Overlay missing or hidden — force re-evaluation
-          _lastEvalUrl = null;
-          doEval();
-        }
-      }
-    }, 1500);
-  }
-
-  function stopLockHeartbeat() {
-    if (_lockHeartbeat) { clearInterval(_lockHeartbeat); _lockHeartbeat = null; }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // FS-LOCKED CLASS — applied to body + documentElement when locked
-  // ═══════════════════════════════════════════════════════════════
-
-  function applyLockedClass() {
-    if (document.body) document.body.classList.add("fs-locked");
-    if (document.documentElement) document.documentElement.classList.add("fs-locked");
-  }
-
-  function removeLockedClass() {
-    if (document.body) document.body.classList.remove("fs-locked");
-    if (document.documentElement) document.documentElement.classList.remove("fs-locked");
-    if (_lockedClassObserver) { _lockedClassObserver.disconnect(); _lockedClassObserver = null; }
-  }
-
-  function startLockedClassGuard() {
-    applyLockedClass();
-    if (_lockedClassObserver) return;
-    let _observerRaf = null;
-    _lockedClassObserver = new MutationObserver(() => {
-      // Re-add class if it was stripped while we're still locked (debounced to 1 rAF)
-      if (_observerRaf) return;
-      _observerRaf = requestAnimationFrame(() => { _observerRaf = null; applyLockedClass(); });
-    });
-    const targets = [document.body, document.documentElement].filter(Boolean);
-    for (const t of targets) {
-      _lockedClassObserver.observe(t, { attributes: true, attributeFilter: ["class"] });
+    // Blocked or unknown page — redirect to saved/bookmarks
+    const dest = window.FocusShield.getSavedUrl();
+    if (location.pathname !== dest) {
+      location.replace(dest);
     }
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // MASTER UPDATE — timer ticks only update pill, never overlay
+  // MESSAGES FROM BACKGROUND
   // ═══════════════════════════════════════════════════════════════
 
-  function updateUI(timer) {
-    if (!timer) return;
-    _currentTimer = timer;
-
-    const remaining = Math.max(0, timer.dailyLimitSeconds - timer.secondsUsed);
-    const isExpired = remaining <= 0;
-    const isActive = timer.sessionActive && !timer.isPaused && !isExpired;
-    const isPaused = timer.sessionActive && timer.isPaused;
-    // Ignore timer.enabled — blocking is always on. The 30-min session
-    // is the only escape hatch. The master toggle in the popup can be
-    // disabled/removed; it must never bypass the lock.
-    const feedUnlocked = isActive;
-
-    // Apply/remove fs-locked body class for CSS rules
-    if (feedUnlocked) {
-      removeLockedClass();
-      stopLockHeartbeat();
-    } else {
-      startLockedClassGuard();
-      startLockHeartbeat();
-    }
-
-    // STATE TRANSITIONS
-    if (_lastFeedUnlocked !== null && feedUnlocked !== _lastFeedUnlocked) {
-      _lastFeedUnlocked = feedUnlocked;
-      if (feedUnlocked) {
-        stopUrlWatcher();
-        hideOverlay();
-        window.location.reload();
-        return;
-      } else {
-        _lastEvalUrl = null;
-        startUrlWatcher();
-        scheduleEval();
-      }
-    } else if (_lastFeedUnlocked === null) {
-      _lastFeedUnlocked = feedUnlocked;
-      if (!feedUnlocked) {
-        _lastEvalUrl = null;
-        startUrlWatcher();
-        scheduleEval();
-      }
-    }
-    // NOTE: if still locked, we do NOT re-evaluate. Overlay stays stable.
-    // Only URL changes trigger re-evaluation.
-
-    // Always update pill
-    updatePill(remaining, isExpired, isActive, isPaused);
-  }
-
-  function updatePill(remaining, isExpired, isActive, isPaused) {
-    const d = document.getElementById("fs-timer-display");
-    const dot = document.getElementById("fs-timer-dot");
-    const s = document.getElementById("fs-btn-start");
-    const p = document.getElementById("fs-btn-pause");
-    const t = document.getElementById("fs-btn-stop");
-
-    if (d) d.textContent = fmt(remaining);
-    if (dot) dot.className = isExpired ? "fs-dot-expired" : isActive ? "fs-dot-active" : isPaused ? "fs-dot-paused" : "fs-dot-idle";
-
-    if (s && p && t) {
-      if (isExpired) {
-        s.style.display = "none"; p.style.display = "none"; t.style.display = "none";
-      } else if (isActive) {
-        s.style.display = "none"; p.style.display = "inline-flex"; t.style.display = "inline-flex";
-      } else if (isPaused) {
-        s.style.display = "inline-flex"; s.textContent = "▶"; s.onclick = () => send("RESUME_SESSION");
-        p.style.display = "none"; t.style.display = "inline-flex";
-      } else {
-        s.style.display = "inline-flex"; s.textContent = "▶"; s.onclick = () => send("START_SESSION");
-        p.style.display = "none"; t.style.display = "none";
-      }
-    }
-  }
+  chrome.runtime.onMessage.addListener(msg => {
+    if (msg.timer) _currentTimer = msg.timer;
+    if (msg.type === "TIME_EXPIRED")   showWarning("🛑 Time's up! Feeds locked.", "expired");
+    if (msg.type === "FIVE_MIN_WARNING") showWarning("⚠️ 5 minutes remaining", "warning");
+    if (msg.type === "ONE_MIN_WARNING")  showWarning("🔴 1 minute remaining!", "danger");
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // WARNINGS
@@ -456,24 +259,66 @@
 
   function showWarning(msg, cls) {
     let el = document.getElementById("fs-warning-toast");
-    if (!el) { el = document.createElement("div"); el.id = "fs-warning-toast"; document.body.appendChild(el); }
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "fs-warning-toast";
+      document.documentElement.appendChild(el);
+    }
     el.className = `fs-toast fs-toast-${cls}`;
-    el.textContent = msg; el.style.display = "block"; el.style.opacity = "1";
-    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.style.display = "none", 400); }, 4000);
+    el.textContent = msg;
+    el.style.display = "block";
+    el.style.opacity = "1";
+    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => { el.style.display = "none"; }, 400); }, 4000);
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // MESSAGES
+  // DRAGGABLE PILL
   // ═══════════════════════════════════════════════════════════════
 
-  chrome.runtime.onMessage.addListener(msg => {
-    if (["STATE_UPDATE","SESSION_STARTED","SESSION_RESUMED","SESSION_PAUSED","SESSION_STOPPED","SETTINGS_UPDATED","TIME_EXPIRED"].includes(msg.type)) {
-      if (msg.type === "TIME_EXPIRED") showWarning("🛑 Time's up! Feeds locked.", "expired");
-      updateUI(msg.timer);
-    }
-    if (msg.type === "FIVE_MIN_WARNING") showWarning("⚠️ 5 minutes remaining", "warning");
-    if (msg.type === "ONE_MIN_WARNING") showWarning("🔴 1 minute remaining!", "danger");
-  });
+  function makeDraggable(el) {
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+    try {
+      chrome.storage.local.get("fs_pill_pos", r => {
+        if (chrome.runtime.lastError || !r.fs_pill_pos) return;
+        el.style.right = "auto";
+        el.style.left = r.fs_pill_pos.left;
+        el.style.top  = r.fs_pill_pos.top;
+      });
+    } catch {}
+
+    el.addEventListener("mousedown", e => {
+      if (e.button !== 0 || e.target.closest("button")) return;
+      dragging = true;
+      const rect = el.getBoundingClientRect();
+      el.style.right = "auto";
+      el.style.left  = rect.left + "px";
+      el.style.top   = rect.top  + "px";
+      origLeft = rect.left; origTop = rect.top;
+      startX = e.clientX;  startY = e.clientY;
+      el.style.transition = "none";
+      el.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      const x = Math.max(4, Math.min(innerWidth  - el.offsetWidth  - 4, origLeft + e.clientX - startX));
+      const y = Math.max(4, Math.min(innerHeight - el.offsetHeight - 4, origTop  + e.clientY - startY));
+      el.style.left = x + "px";
+      el.style.top  = y + "px";
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.transition = "";
+      el.style.cursor = "grab";
+      try {
+        chrome.storage.local.set({ fs_pill_pos: { left: el.style.left, top: el.style.top } });
+      } catch {}
+    });
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // STYLES
@@ -520,24 +365,27 @@
 
   async function init() {
     injectStyles();
-    if (document.body) ensureTimerPill();
-    else document.addEventListener("DOMContentLoaded", ensureTimerPill);
+    ensureTimerPill();
+
     const state = await getState();
-    if (state) {
-      updateUI(state.timer);
+    if (state?.timer) {
+      _currentTimer = state.timer;
     } else {
-      // Background unreachable — assume locked so protection still enforces
-      updateUI({
+      // Background unreachable — default to locked
+      _currentTimer = {
         secondsUsed: 0, dailyLimitSeconds: 1800,
-        sessionActive: false, isPaused: false, enabled: true, lastTickAt: null,
+        sessionActive: false, isPaused: false, enabled: true,
         lastResetDate: new Date().toISOString().split("T")[0],
-      });
+      };
     }
+
+    enforce();                    // enforce immediately on load
+    setInterval(enforce, 750);    // then every 750 ms
   }
 
-  let _initDone = false;
-  function tryInit() { if (!_initDone) { _initDone = true; init(); } }
-  if (document.body) tryInit();
-  else document.addEventListener("DOMContentLoaded", tryInit);
-  window.addEventListener("load", () => setTimeout(tryInit, 500));
+  if (document.readyState !== "loading") {
+    init();
+  } else {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  }
 })();

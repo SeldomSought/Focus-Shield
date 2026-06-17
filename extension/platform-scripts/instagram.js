@@ -116,40 +116,29 @@
   };
 
   // ── Lock behavior: REDIRECT, no overlay ─────────────────
+  // enforce() in shared.js calls this every 750 ms when locked.
+  // Keep it idempotent — no internal timers or state needed.
 
   window.FocusShield.onLocked = function (isExpired, remaining) {
-    const p = window.location.pathname;
-
-    // Allowed page — but if we're on the /accounts/edit/ fallback, try to
-    // advance to the saved page once Instagram's nav has had time to render.
+    // On an allowed page — if it's the /accounts/edit/ fallback and we
+    // can now detect the username, advance to saved.
     if (window.FocusShield.isAllowedPage()) {
-      if (p.startsWith("/accounts/edit")) {
-        redirectToSavedWhenReady();
+      if (window.location.pathname.startsWith("/accounts/edit")) {
+        const dest = getSavedUrl();
+        if (!dest.startsWith("/accounts/edit")) {
+          window.location.replace(dest);
+        }
       }
-      return true;
+      return;
     }
 
-    // Not on an allowed page — redirect immediately, no waiting.
-    window.location.replace(getSavedUrl());
-    return true;
+    // Not on an allowed page — redirect immediately.
+    // getSavedUrl() returns /{username}/saved/ if detectable, else /accounts/edit/.
+    const dest = getSavedUrl();
+    if (window.location.pathname !== dest) {
+      window.location.replace(dest);
+    }
   };
-
-  // After landing on /accounts/edit/ (fallback), poll for username and
-  // advance to the saved page as soon as Instagram's nav renders.
-  function redirectToSavedWhenReady() {
-    let attempts = 0;
-    const check = () => {
-      attempts++;
-      const url = getSavedUrl();
-      if (!url.startsWith("/accounts/edit")) {
-        window.location.replace(url);
-      } else if (attempts < 15) {
-        setTimeout(check, 400);
-      }
-      // Give up after ~6 s — user stays on /accounts/edit/ (settings page, not feed)
-    };
-    setTimeout(check, 400);
-  }
 
   // ── Allowed links (for other UI that might use them) ────
 
